@@ -1,0 +1,21 @@
+<resources>
+    <item name="main_scroll" type="id" />
+    <item name="webhook_input" type="id" />
+    <item name="secret_input" type="id" />
+    <item name="filter_scroll" type="id" />
+    <item name="filter_enabled" type="id" />
+    <item name="filter_include" type="id" />
+    <item name="filter_digits" type="id" />
+    <item name="filter_any" type="id" />
+    <item name="filter_all" type="id" />
+    <item name="filter_exclude" type="id" />
+    <item name="filter_senders" type="id" />
+    <item name="filter_test_sender" type="id" />
+    <item name="filter_test_body" type="id" />
+    <item name="filter_preset_everything" type="id" />
+    <item name="filter_preset_verification" type="id" />
+    <item name="filter_preset_either" type="id" />
+    <item name="filter_preset_custom" type="id" />
+    <item name="filter_test_button" type="id" />
+    <item name="filter_save_button" type="id" />
+</resources>

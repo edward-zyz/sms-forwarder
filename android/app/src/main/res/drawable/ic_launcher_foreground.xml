@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 关键笔画位于以 (54,54) 为圆心、半径 33 的安全区内。 -->
+    <path android:fillColor="#160E345B" android:pathData="M39,35H69Q78,35 78,44V63Q78,72 69,72H48L38,79V72Q30,72 30,63V44Q30,35 39,35Z" />
+    <path android:fillColor="#FAFFFF" android:pathData="M39,33H69Q78,33 78,42V61Q78,70 69,70H48L38,77V70Q30,70 30,61V42Q30,33 39,33Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#167E9A"
+        android:strokeWidth="4.3" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M42,52H66M59,45L66,52L59,59" />
+</vector>

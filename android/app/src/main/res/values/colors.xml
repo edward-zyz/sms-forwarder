@@ -1,0 +1,15 @@
+<resources>
+    <color name="page">#F4F6FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="ink">#17243A</color>
+    <color name="muted">#57667A</color>
+    <color name="accent">#215ED6</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="accent_surface">#EAF1FF</color>
+    <color name="line">#DFE5EF</color>
+    <color name="field">#F7F9FC</color>
+    <color name="success">#146B49</color>
+    <color name="success_surface">#E6F5ED</color>
+    <color name="danger">#B52F38</color>
+    <color name="ripple">#24215ED6</color>
+</resources>

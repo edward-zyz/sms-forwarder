@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 满幅底色交由系统圆形、圆角矩形或 MIUI 蒙版裁切。 -->
+    <path android:pathData="M0,0H108V108H0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="12" android:startY="4"
+                android:endX="100" android:endY="108"
+                android:startColor="#138F99" android:endColor="#175DA6" />
+        </aapt:attr>
+    </path>
+</vector>

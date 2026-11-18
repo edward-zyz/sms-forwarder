@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp" android:height="48dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- 旧版桌面及页头的圆角版本。 -->
+    <path android:pathData="M24,0H84Q108,0 108,24V84Q108,108 84,108H24Q0,108 0,84V24Q0,0 24,0Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="12" android:startY="4"
+                android:endX="100" android:endY="108"
+                android:startColor="#138F99" android:endColor="#175DA6" />
+        </aapt:attr>
+    </path>
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.22" android:scaleY="1.22">
+        <path android:fillColor="#160E345B" android:pathData="M39,35H69Q78,35 78,44V63Q78,72 69,72H48L38,79V72Q30,72 30,63V44Q30,35 39,35Z" />
+        <path android:fillColor="#FAFFFF" android:pathData="M39,33H69Q78,33 78,42V61Q78,70 69,70H48L38,77V70Q30,70 30,61V42Q30,33 39,33Z" />
+        <path android:fillColor="#00000000" android:strokeColor="#167E9A"
+            android:strokeWidth="4.3" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M42,52H66M59,45L66,52L59,59" />
+    </group>
+</vector>

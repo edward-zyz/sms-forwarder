@@ -1,0 +1,17 @@
+.DS_Store
+.idea/
+*.iml
+**/.gradle/
+**/.kotlin/
+**/build/
+**/local.properties
+.env
+.env.*
+!.env.example
+
+# 本机专用配置、脚本和历史资料
+/private/
+*.jks
+*.keystore
+**/keystore.properties
+**/signing.properties
