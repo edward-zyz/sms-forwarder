@@ -1,15 +1,21 @@
 <resources>
-    <color name="page">#101722</color>
-    <color name="surface">#1A2433</color>
+    <color name="page">#0E1520</color>
+    <color name="surface">#182231</color>
+    <color name="neutral_surface">#202C3D</color>
     <color name="ink">#EFF4FC</color>
-    <color name="muted">#ABBAD0</color>
-    <color name="accent">#A6C5FF</color>
-    <color name="on_accent">#102A51</color>
-    <color name="accent_surface">#223754</color>
-    <color name="line">#354357</color>
-    <color name="field">#131D2C</color>
-    <color name="success">#91DDBA</color>
-    <color name="success_surface">#1C3C32</color>
-    <color name="danger">#FFABB1</color>
-    <color name="ripple">#30A6C5FF</color>
+    <color name="muted">#B0C0D6</color>
+    <color name="subtle">#8FA2BC</color>
+    <color name="accent">#8AB4FF</color>
+    <color name="on_accent">#0D2448</color>
+    <color name="accent_surface">#1E3350</color>
+    <color name="line">#2B384B</color>
+    <color name="card_stroke">#273446</color>
+    <color name="field">#121B29</color>
+    <color name="success">#7CE0B6</color>
+    <color name="success_surface">#17362D</color>
+    <color name="warning">#F6C26B</color>
+    <color name="warning_surface">#3B2D16</color>
+    <color name="danger">#FF9BA2</color>
+    <color name="danger_surface">#3E1E25</color>
+    <color name="ripple">#2E8AB4FF</color>
 </resources>

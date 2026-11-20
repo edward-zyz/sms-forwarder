@@ -6,7 +6,6 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
-import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.URL
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,17 +27,30 @@ class ForwardJob : JobService() {
             var retry = false
             Store(this).use { store ->
                 try {
+                    val failedDestinations = mutableSetOf<String>()
                     repeat(20) {
                         if (!permitted()) return@repeat
-                        val item = synchronized(State.gate) { store.next() } ?: return@repeat
-                        val prefs = State.prefs(this)
-                        val webhook = prefs.getString("webhook", "").orEmpty()
-                        if (!Protocol.validWebhook(webhook)) {
-                            State.status(this, "飞书地址无效，请重新配置")
+                        val item = synchronized(State.gate) { store.next(failedDestinations) } ?: return@repeat
+                        val config = try {
+                            ConfigStore.load(this)
+                        } catch (_: IllegalArgumentException) {
+                            State.status(this, "转发配置异常，请重新检查目的地与规则")
+                            return@repeat
+                        }
+                        val destination = ConfigStore.resolveDestination(this, config, item.destinationId)
+                        if (destination == null || destination.validationError() != null) {
+                            synchronized(State.gate) { store.failed(item.id) }
+                            failedDestinations += item.destinationId
+                            State.status(this, "转发目的地无效或已删除，第 ${item.attempts + 1}/8 次失败，请检查配置或清理队列")
+                            retry = true
                             return@repeat
                         }
                         try {
-                            val conn = URL(webhook).openConnection() as HttpsURLConnection
+                            val request = DestinationProtocol.buildRequest(destination, item.text, System.currentTimeMillis())
+                            check(request.body.size <= DestinationProtocol.MAX_PAYLOAD_BYTES) {
+                                "消息转义后超过 20KB 限制，请清理该条积压"
+                            }
+                            val conn = URL(request.url).openConnection() as HttpsURLConnection
                             run.connection = conn
                             conn.instanceFollowRedirects = false
                             conn.requestMethod = "POST"
@@ -46,38 +58,39 @@ class ForwardJob : JobService() {
                             conn.readTimeout = 10000
                             conn.doOutput = true
                             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                            val payload = Protocol.payload(item.text, prefs.getString("secret", "").orEmpty(), System.currentTimeMillis() / 1000).toByteArray(Charsets.UTF_8)
-                            check(payload.size <= 20000) { "消息转义后超过飞书 20KB 限制，请清理该条积压" }
-                            conn.setFixedLengthStreamingMode(payload.size)
+                            request.headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+                            conn.setFixedLengthStreamingMode(request.body.size)
                             if (!permitted()) { conn.disconnect(); return@repeat }
-                            conn.outputStream.use { it.write(payload) }
+                            conn.outputStream.use { it.write(request.body) }
                             val code = conn.responseCode
-                            if (code != 200) throw IllegalStateException("HTTP $code")
-                            val response = conn.inputStream.use { input ->
-                                val output = ByteArrayOutputStream()
-                                val buffer = ByteArray(4096)
-                                while (true) {
-                                    val size = input.read(buffer)
-                                    if (size < 0) break
-                                    check(output.size() + size <= 32768) { "响应过大" }
-                                    output.write(buffer, 0, size)
+                            val responseText = if (code in 200..299) {
+                                conn.inputStream.use { input ->
+                                    val output = ByteArrayOutputStream()
+                                    val buffer = ByteArray(4096)
+                                    while (true) {
+                                        val size = input.read(buffer)
+                                        if (size < 0) break
+                                        check(output.size() + size <= 32768) { "响应过大" }
+                                        output.write(buffer, 0, size)
+                                    }
+                                    output.toString("UTF-8")
                                 }
-                                JSONObject(output.toString("UTF-8"))
-                            }
-                            check(response.has("code") && response.optInt("code", -1) == 0) { "飞书错误码 ${response.optInt("code", -1)}" }
+                            } else ""
+                            val checkResult = DestinationProtocol.checkResponse(destination.type, code, responseText)
+                            check(checkResult.ok) { checkResult.detail }
                             synchronized(State.gate) { store.done(item.id) }
-                            State.status(this, "飞书已接收一条消息")
+                            State.status(this, "${destination.type.displayName}「${destination.name}」已接收一条消息")
                         } catch (e: Exception) {
                             if (!stopped.get() && State.enabled(this)) {
                                 synchronized(State.gate) { store.failed(item.id) }
+                                failedDestinations += item.destinationId
                                 val detail = if (e is IllegalStateException) e.message.orEmpty() else "网络连接失败"
-                                State.status(this, "$detail；第 ${item.attempts + 1}/8 次失败，保留待发")
+                                State.status(this, "「${destination.name}」$detail；第 ${item.attempts + 1}/8 次失败，保留待发")
                                 retry = true
                             }
-                            return@use
                         } finally { run.connection?.disconnect(); run.connection = null }
                     }
-                    retry = store.next() != null
+                    retry = retry || store.next() != null
                 } catch (_: Exception) { State.status(this, "处理队列失败，稍后重试"); retry = true }
             }
             synchronized(State.gate) {

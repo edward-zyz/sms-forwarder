@@ -1,49 +1,71 @@
 package com.kidbuddy.smsforwarder
 
-import android.app.Activity
-import android.app.AlertDialog
-import android.content.Context
-import android.graphics.Typeface
+import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
-import android.text.InputType
-import android.text.SpannableString
-import android.text.Spanned
 import android.text.TextWatcher
-import android.text.style.ForegroundColorSpan
-import android.text.style.RelativeSizeSpan
-import android.text.style.StyleSpan
 import android.view.View
-import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.radiobutton.MaterialRadioButton
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 
-/** 表单只改内存草稿；保存才生效，本地试算不联网、不入队。 */
-class FilterActivity : Activity() {
+/** 新建或编辑单条转发规则；表单只改内存草稿，保存才生效，本地试算不联网、不入队。 */
+class FilterActivity : AppCompatActivity() {
+    companion object {
+        const val EXTRA_RULE_ID = "rule_id"
+    }
+
     private lateinit var ui: Ui
     private lateinit var editor: FilterEditor
-    private lateinit var include: EditText
-    private lateinit var digits: CheckBox
-    private lateinit var exclude: EditText
-    private lateinit var senders: EditText
-    private lateinit var all: RadioButton
-    private lateinit var any: RadioButton
-    private lateinit var custom: LinearLayout
+    private lateinit var ruleNameLayout: TextInputLayout
+    private lateinit var ruleNameInput: TextInputEditText
+    private lateinit var ruleEnabledSwitch: MaterialSwitch
+    private lateinit var destinationLabel: TextView
+    private lateinit var include: TextInputEditText
+    private lateinit var digits: MaterialCheckBox
+    private lateinit var exclude: TextInputEditText
+    private lateinit var senders: TextInputEditText
+    private lateinit var all: MaterialRadioButton
+    private lateinit var any: MaterialRadioButton
+    private lateinit var presetButtons: List<Pair<FilterEditor.Intent, MaterialRadioButton>>
+    private lateinit var custom: MaterialCardView
     private lateinit var combination: LinearLayout
     private lateinit var optional: LinearLayout
     private lateinit var excludeFields: LinearLayout
     private lateinit var senderFields: LinearLayout
     private lateinit var excludeSummary: TextView
     private lateinit var senderSummary: TextView
+    private lateinit var excludeChevron: ImageView
+    private lateinit var senderChevron: ImageView
+    private lateinit var previewBadge: TextView
     private lateinit var summary: TextView
     private lateinit var dirty: TextView
-    private lateinit var error: TextView
-    private lateinit var save: android.widget.Button
+    private lateinit var errorBox: TextView
+    private lateinit var save: MaterialButton
+
+    private var editingRuleId: String? = null
+    private var savedName = ""
+    private var savedEnabled = true
+    private var savedDestId = ""
+    private var draftName = ""
+    private var draftEnabled = true
+    private var draftDestId = ""
+    private var destinations: List<Destination> = emptyList()
+
     private var binding = true
     private var invalidSaved = false
     private var excludeOpen = false
@@ -55,18 +77,33 @@ class FilterActivity : Activity() {
     private var testRules: FilterRules? = null
     private var abandonDialog: AlertDialog? = null
 
-    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(AppAppearance.wrap(newBase)) }
-
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppAppearance.apply(this)
         super.onCreate(savedInstanceState)
         ui = Ui(this)
-        val loaded = runCatching { FilterSettings.load(this) }
-        val saved = savedInstanceState?.getBundle("savedRules")?.let(::readRules) ?: loaded.getOrDefault(FilterRules())
-        val draft = savedInstanceState?.getBundle("draftRules")?.let(::readRules) ?: saved
-        val intent = savedInstanceState?.getString("intent")?.let { runCatching { FilterEditor.Intent.valueOf(it) }.getOrNull() }
-            ?: FilterEditor.identify(draft)
-        editor = FilterEditor(saved, draft, intent)
-        invalidSaved = savedInstanceState?.getBoolean("invalidSaved") ?: loaded.isFailure
+
+        val configResult = runCatching { ConfigStore.load(this) }
+        val config = configResult.getOrDefault(ForwardConfig())
+        destinations = config.destinations
+        editingRuleId = intent.getStringExtra(EXTRA_RULE_ID)?.takeIf { it.isNotBlank() }
+        val existing = editingRuleId?.let { id -> config.rules.firstOrNull { it.id == id } }
+
+        val defaultDestId = destinations.firstOrNull()?.id.orEmpty()
+        val defaultName = existing?.name ?: "规则 ${config.rules.size + 1}"
+        savedName = savedInstanceState?.getString("savedName") ?: (existing?.name ?: defaultName)
+        savedEnabled = savedInstanceState?.getBoolean("savedEnabled") ?: (existing?.enabled ?: true)
+        savedDestId = savedInstanceState?.getString("savedDestId") ?: (existing?.destinationId ?: defaultDestId)
+
+        draftName = savedInstanceState?.getString("draftName") ?: savedName
+        draftEnabled = savedInstanceState?.getBoolean("draftEnabled") ?: savedEnabled
+        draftDestId = savedInstanceState?.getString("draftDestId") ?: savedDestId
+
+        val savedFilter = savedInstanceState?.getBundle("savedRules")?.let(::readRules) ?: (existing?.filter ?: FilterRules())
+        val draftFilter = savedInstanceState?.getBundle("draftRules")?.let(::readRules) ?: savedFilter
+        val filterIntent = savedInstanceState?.getString("intent")?.let { runCatching { FilterEditor.Intent.valueOf(it) }.getOrNull() }
+            ?: FilterEditor.identify(draftFilter)
+        editor = FilterEditor(savedFilter, draftFilter, filterIntent)
+        invalidSaved = savedInstanceState?.getBoolean("invalidSaved") ?: configResult.isFailure
         excludeOpen = savedInstanceState?.getBoolean("excludeOpen") ?: false
         senderOpen = savedInstanceState?.getBoolean("senderOpen") ?: false
         testSender = savedInstanceState?.getString("testSender").orEmpty()
@@ -75,18 +112,22 @@ class FilterActivity : Activity() {
         testRules = savedInstanceState?.getBundle("testRules")?.let(::readRules)
 
         val root = ui.column().apply { setBackgroundColor(ui.color(R.color.page)) }
-        val content = ui.column().apply { setPadding(ui.dp(20), ui.dp(20), ui.dp(20), ui.dp(8)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(16)) }
+        ui.enableMotion(content)
         val scroll = ScrollView(this).apply {
             id = R.id.filter_scroll
             isFillViewport = true
             addView(content)
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        // 底部固定操作栏
+        root.addView(View(this).apply { setBackgroundColor(ui.color(R.color.line)) }, LinearLayout.LayoutParams(-1, ui.dp(1)))
         val footer = ui.column().apply {
-            setPadding(ui.dp(20), ui.dp(10), ui.dp(20), ui.dp(12))
+            setPadding(ui.dp(18), ui.dp(10), ui.dp(18), ui.dp(14))
             setBackgroundColor(ui.color(R.color.surface))
         }
-        dirty = ui.text("", 13f, R.color.muted).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        dirty = ui.text("", 12f, R.color.subtle).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         footer.addView(dirty)
         ui.gap(footer, 8)
         val actions = ui.row()
@@ -94,32 +135,109 @@ class FilterActivity : Activity() {
             id = R.id.filter_test_button
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) }
         })
-        save = ui.button("保存并生效", primary = true) { saveRules() }.apply {
+        save = ui.button("保存规则", primary = true) { saveRules() }.apply {
             id = R.id.filter_save_button
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1.3f)
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1.35f)
         }
         actions.addView(save)
         footer.addView(actions)
         root.addView(footer)
         setContentView(root)
 
-        content.addView(ui.button("返回短信转发") { requestExit() })
-        ui.gap(content, 16)
-        content.addView(ui.text("哪些短信要转发", 25f, bold = true))
-        ui.gap(content, 8)
-        content.addView(ui.text("先选一种方式，再按需要加限制。修改保存后只影响新收到的短信，已有待发消息不变。", 14f, R.color.muted))
-        ui.gap(content, 18)
-        content.addView(ui.card().apply {
-            addView(ui.text("选择转发方式", 17f, bold = true))
-            ui.gap(this, 8)
+        // 标准顶栏
+        content.addView(ui.topBar(if (existing == null) "新建转发规则" else "编辑转发规则") { requestExit() })
+        content.addView(ui.text("保存后仅影响新收到的短信，已有待发消息不变。", 13f, R.color.muted))
+        ui.gap(content, 14)
+
+        // 错误提示块
+        errorBox = ui.text(
+            if (invalidSaved) "已保存配置异常，请重新检查并保存。" else "",
+            13f, R.color.danger, bold = true
+        ).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+            setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12))
+            background = ui.round(R.color.danger_surface, 12)
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = ui.dp(14) }
+        }
+        content.addView(errorBox)
+
+        // 第一层：规则基本信息
+        ui.sectionTitle(content, "基本信息")
+        content.addView(ui.card(padH = 16, padV = 16) {
+            val (nl, ni) = ui.textField(
+                stableId = R.id.rule_name_input,
+                label = "规则名称 *",
+                placeholder = "例如：验证码转发、告警通知",
+                value = draftName,
+                singleLine = true
+            )
+            ruleNameLayout = nl
+            ruleNameInput = ni
+            addView(ruleNameLayout)
+
+            ui.divider(this, top = 8, bottom = 10)
+
+            destinationLabel = ui.text("", 14f, R.color.ink, bold = true)
+            addView(ui.row().apply {
+                minimumHeight = ui.dp(52)
+                background = ui.ripple(R.color.surface, 10)
+                addView(ui.column().apply {
+                    addView(ui.fieldLabel("转发目的地", required = true))
+                    ui.gap(this, 2)
+                    addView(destinationLabel)
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) })
+                addView(ui.text("选择", 14f, R.color.accent, bold = true))
+                addView(ui.chevronRight(R.color.accent))
+                setOnClickListener { ui.haptic(this); pickDestination() }
+            })
+
+            ui.divider(this, top = 10, bottom = 10)
+
+            addView(ui.row().apply {
+                addView(ui.column().apply {
+                    addView(ui.text("启用此规则", 15f, bold = true))
+                    addView(ui.text("关闭后暂不生效，规则配置会保留", 12f, R.color.subtle))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                ruleEnabledSwitch = ui.switch(draftEnabled, "启用此转发规则", R.id.rule_enabled_switch).apply {
+                    setOnCheckedChangeListener { _, checked ->
+                        if (!binding) {
+                            ui.haptic(this)
+                            draftEnabled = checked
+                            render()
+                        }
+                    }
+                }
+                addView(ruleEnabledSwitch)
+            })
+        })
+
+        // 第二层：实时规则效果预览卡
+        content.addView(ui.card(R.color.accent_surface, border = R.color.line, padH = 16, padV = 14) {
+            addView(ui.row().apply {
+                addView(ui.text("规则效果预览", 14f, R.color.accent, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                previewBadge = ui.badge()
+                addView(previewBadge)
+            })
+            ui.gap(this, 6)
+            summary = ui.text("", 14f, R.color.ink).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+            addView(summary)
+        })
+
+        // 第三层：转发方式
+        ui.sectionTitle(content, "匹配方式")
+        content.addView(ui.card(padH = 14, padV = 14) {
             val choices = RadioGroup(this@FilterActivity).apply { isSaveEnabled = false }
             val options = listOf(
-                Triple(FilterEditor.Intent.EVERYTHING, R.id.filter_preset_everything, "全部短信"),
-                Triple(FilterEditor.Intent.VERIFICATION, R.id.filter_preset_verification, "验证码短信\n同时含“验证码”和4～6位数字"),
-                Triple(FilterEditor.Intent.VERIFICATION_OR_DIGITS, R.id.filter_preset_either, "验证码字样或数字\n有一个符合即可，订单号也可能命中"),
-                Triple(FilterEditor.Intent.CUSTOM, R.id.filter_preset_custom, "自己设置")
+                Triple(FilterEditor.Intent.EVERYTHING, R.id.filter_preset_everything, "全部短信\n收到任何新短信都直接转发"),
+                Triple(FilterEditor.Intent.VERIFICATION, R.id.filter_preset_verification, "仅验证码短信 · 推荐\n同时包含“验证码”和 4–6 位数字"),
+                Triple(FilterEditor.Intent.VERIFICATION_OR_DIGITS, R.id.filter_preset_either, "验证码字样或 4–6 位数字\n满足其一即转发，订单号也可能命中"),
+                Triple(FilterEditor.Intent.CUSTOM, R.id.filter_preset_custom, "自定义规则\n自由设置关键词与数字匹配条件")
             )
-            options.forEach { (choice, stableId, title) -> choices.addView(radio(title, stableId)) }
+            presetButtons = options.map { (choice, stableId, title) ->
+                val btn = ui.optionRadio(title, stableId)
+                choices.addView(btn)
+                choice to btn
+            }
             choices.check(options.first { it.first == editor.intent }.second)
             addView(choices)
             choices.setOnCheckedChangeListener { _, checked ->
@@ -131,34 +249,32 @@ class FilterActivity : Activity() {
             }
         })
 
-        content.addView(ui.card(R.color.accent_surface).apply {
-            addView(ui.text("这次会怎么转发", 15f, bold = true))
-            ui.gap(this, 8)
-            summary = ui.text("", 14f).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
-            addView(summary)
-        })
-
-        custom = ui.card().apply {
-            addView(ui.text("短信里要有什么", 17f, bold = true))
-            ui.gap(this, 8)
-            addView(ui.text("包含这些词里的任意一个 · 可不填", 14f, bold = true))
-            include = field(R.id.filter_include, "例如：验证码,登录（每行一个，或用逗号分开）", draft.includeKeywords.joinToString("\n"))
-            ui.gap(this, 8); addView(include)
-            digits = CheckBox(this@FilterActivity).apply {
-                id = R.id.filter_digits; text = "有连续 4–6 位数字"; textSize = 16f
-                setTextColor(ui.color(R.color.ink)); minHeight = ui.dp(48)
-                isChecked = draft.requireDigits; isSaveEnabled = false
-            }
+        // 第四层：自定义正文条件
+        custom = ui.card(padH = 16, padV = 16) {
+            addView(ui.text("正文匹配条件", 16f, bold = true))
+            ui.gap(this, 10)
+            val (includeLayout, includeInput) = ui.textField(
+                stableId = R.id.filter_include,
+                label = "包含以下任意关键词 · 选填",
+                placeholder = "例如：验证码, 登录（每行一个，或用逗号分隔）",
+                value = draftFilter.includeKeywords.joinToString("\n"),
+                singleLine = false
+            )
+            include = includeInput
+            addView(includeLayout)
+            ui.gap(this, 4)
+            digits = ui.checkBox(R.id.filter_digits, "包含连续 4–6 位数字", draftFilter.requireDigits)
             addView(digits)
-            addView(ui.text("完整的数字串才算；7 位及以上不算。", 13f, R.color.muted))
+            addView(ui.text("仅匹配完整数字串，7 位及以上数字（如长订单号）不计入。", 12f, R.color.subtle))
             combination = ui.column().apply {
-                ui.gap(this, 12)
-                addView(ui.text("上面两项怎么配合", 14f, bold = true))
+                ui.divider(this, top = 12, bottom = 10)
+                addView(ui.text("上面两项的关系", 13f, R.color.muted, bold = true))
+                ui.gap(this, 4)
                 val group = RadioGroup(this@FilterActivity).apply { isSaveEnabled = false }
-                any = radio("有一个符合就行", R.id.filter_any)
-                all = radio("两项都符合", R.id.filter_all)
+                any = ui.simpleRadio("满足其中一项即可", R.id.filter_any)
+                all = ui.simpleRadio("必须两项同时满足", R.id.filter_all)
                 group.addView(any); group.addView(all)
-                group.check(if (draft.matchAll) R.id.filter_all else R.id.filter_any)
+                group.check(if (draftFilter.matchAll) R.id.filter_all else R.id.filter_any)
                 group.setOnCheckedChangeListener { _, selected -> if (!binding) { editor.matchAll(selected == R.id.filter_all); render() } }
                 addView(group)
             }
@@ -166,57 +282,130 @@ class FilterActivity : Activity() {
         }
         content.addView(custom)
 
+        // 第五层：附加限制（分组折叠卡片）
         optional = ui.column()
-        optional.addView(ui.text("还可以加限制 · 选填", 15f, R.color.muted))
-        ui.gap(optional, 12)
-        optional.addView(ui.card().apply {
-            addView(ui.text("不转发这些内容", 17f, bold = true))
-            ui.gap(this, 8)
-            excludeSummary = ui.text("", 14f, R.color.muted); addView(excludeSummary)
-            ui.gap(this, 8)
-            addView(ui.button("添加 / 修改排除词") { excludeOpen = !excludeOpen; render() })
+        ui.sectionTitle(optional, "附加限制 · 选填", "在上面条件基础上进一步缩小范围")
+        optional.addView(ui.card(padH = 16, padV = 6) {
+            ui.enableMotion(this)
+            excludeSummary = ui.text("", 13f, R.color.muted)
+            excludeChevron = ui.chevronDown(R.color.accent)
+            addView(collapsibleHeader("排除包含这些词的短信", excludeSummary, excludeChevron) {
+                excludeOpen = !excludeOpen
+                render()
+            })
             excludeFields = ui.column().apply {
-                ui.gap(this, 8)
-                addView(ui.text("含其中任何一个词就不转，即使符合上面的条件。", 13f, R.color.muted))
-                exclude = field(R.id.filter_exclude, "例如：银行（每行一个，或用逗号分开）", draft.excludeKeywords.joinToString("\n"))
-                ui.gap(this, 8); addView(exclude)
+                setPadding(0, 0, 0, ui.dp(12))
+                val (el, ei) = ui.textField(
+                    stableId = R.id.filter_exclude,
+                    label = "排除关键词",
+                    placeholder = "例如：银行, 营销（每行一个，或用逗号分隔）",
+                    value = draftFilter.excludeKeywords.joinToString("\n"),
+                    helper = "只要包含任意一个排除词就不转发，优先级最高。",
+                    singleLine = false
+                )
+                exclude = ei
+                addView(el)
             }
             addView(excludeFields)
-        })
-        optional.addView(ui.card().apply {
-            addView(ui.text("只转发这些号码", 17f, bold = true))
-            ui.gap(this, 8)
-            senderSummary = ui.text("", 14f, R.color.muted); addView(senderSummary)
-            ui.gap(this, 8)
-            addView(ui.button("添加 / 修改号码") { senderOpen = !senderOpen; render() })
+
+            ui.divider(this, top = 2, bottom = 2)
+
+            senderSummary = ui.text("", 13f, R.color.muted)
+            senderChevron = ui.chevronDown(R.color.accent)
+            addView(collapsibleHeader("只转发这些号码发来的短信", senderSummary, senderChevron) {
+                senderOpen = !senderOpen
+                render()
+            })
             senderFields = ui.column().apply {
-                ui.gap(this, 8)
-                addView(ui.text("填完整号码，或用 106* 表示以 106 开头。留空接收所有号码。", 13f, R.color.muted))
-                senders = field(R.id.filter_senders, "每行一个号码，也可用逗号分开", draft.allowedSenders.joinToString("\n"))
-                ui.gap(this, 8); addView(senders)
-                addView(ui.button("号码怎么填写？") {
-                    AlertDialog.Builder(this@FilterActivity).setTitle("号码怎么填写")
-                        .setMessage("完整号码只匹配这个号码，不按尾号匹配。\n106* 匹配所有以 106 开头的号码；* 只能放末尾，不能单独填写。\n支持空格、横线、括号、全角数字，以及中国手机号 +86 / 0086 格式。")
+                setPadding(0, 0, 0, ui.dp(12))
+                val (sl, si) = ui.textField(
+                    stableId = R.id.filter_senders,
+                    label = "允许的发件号码",
+                    placeholder = "每行一个号码，也可用逗号分隔",
+                    value = draftFilter.allowedSenders.joinToString("\n"),
+                    helper = "填完整号码，或用 106* 表示以 106 开头；留空表示不限号码。",
+                    singleLine = false
+                )
+                senders = si
+                addView(sl)
+                addView(ui.ghostButton("号码怎么填写？") {
+                    ui.dialog().setTitle("号码填写说明")
+                        .setMessage("• 完整号码：只匹配这个号码，不按尾号匹配。\n• 前缀通配：如 106* 匹配所有以 106 开头的号码；* 只能放末尾，不能单独填写。\n• 格式兼容：支持空格、横线、括号、全角数字，以及中国手机号 +86 / 0086 格式。")
                         .setPositiveButton("知道了", null).show()
                 })
             }
             addView(senderFields)
         })
         content.addView(optional)
-        error = ui.text(if (invalidSaved) "已保存设置异常。请重新设置并保存；修复前新短信不会转发。" else "", 14f, R.color.danger)
-        content.addView(error)
 
-        // 自己保存控件文本，避免 Android 自动恢复触发监听、悄悄改写未编辑字段。
         savedInstanceState?.getString("includeRaw")?.let { include.setText(it) }
         savedInstanceState?.getString("excludeRaw")?.let { exclude.setText(it) }
         savedInstanceState?.getString("sendersRaw")?.let { senders.setText(it) }
+        ruleNameInput.watch { draftName = it; ruleNameLayout.error = null; render() }
         include.watch { editor.include(FilterEditor.parseList(it)); render() }
         exclude.watch { editor.exclude(FilterEditor.parseList(it)); render() }
         senders.watch { editor.senders(FilterEditor.parseList(it)); render() }
         digits.setOnCheckedChangeListener { _, checked -> if (!binding) { editor.digits(checked); render() } }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { requestExit() }
+        })
         binding = false
         render()
         if (savedInstanceState?.getBoolean("testOpen") == true) showTest()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        destinations = runCatching { ConfigStore.load(this).destinations }.getOrDefault(destinations)
+        if (draftDestId.isBlank() && destinations.isNotEmpty()) {
+            draftDestId = destinations.first().id
+        }
+        render()
+    }
+
+    private fun pickDestination() {
+        if (destinations.isEmpty()) {
+            ui.dialog()
+                .setTitle("还没有转发目的地")
+                .setMessage("请先添加一个转发目的地（飞书、企业微信、钉钉或自定义 Webhook）。")
+                .setPositiveButton("去添加") { _, _ ->
+                    startActivity(Intent(this, DestinationEditActivity::class.java))
+                }
+                .setNegativeButton("取消", null)
+                .show()
+            return
+        }
+        val labels = destinations.map { "${it.name}（${it.type.displayName}）" }.toTypedArray()
+        val currentIdx = destinations.indexOfFirst { it.id == draftDestId }.coerceAtLeast(0)
+        ui.dialog()
+            .setTitle("选择转发目的地")
+            .setSingleChoiceItems(labels, currentIdx) { dialog, which ->
+                draftDestId = destinations[which].id
+                dialog.dismiss()
+                render()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun isRuleDirty(): Boolean =
+        editingRuleId == null ||
+            editor.isDirty ||
+            draftName.trim() != savedName.trim() ||
+            draftEnabled != savedEnabled ||
+            draftDestId != savedDestId
+
+    private fun collapsibleHeader(title: String, summaryView: TextView, chevronView: ImageView, onClick: () -> Unit) = ui.row().apply {
+        minimumHeight = ui.dp(58)
+        setPadding(0, ui.dp(10), 0, ui.dp(10))
+        background = ui.ripple(R.color.surface, 10)
+        addView(ui.column().apply {
+            addView(ui.text(title, 15f, bold = true))
+            ui.gap(this, 2)
+            addView(summaryView)
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) })
+        addView(chevronView)
+        setOnClickListener { ui.haptic(this); onClick() }
     }
 
     private fun bindBodyFields() {
@@ -226,39 +415,86 @@ class FilterActivity : Activity() {
         if (editor.rules.matchAll) all.isChecked = true else any.isChecked = true
         binding = false
     }
+
     private fun render() {
         val rules = editor.rules
+        val dest = destinations.firstOrNull { it.id == draftDestId }
+        destinationLabel.text = if (dest != null) "${dest.type.displayName} · ${dest.name}" else "尚未选择目的地"
+        destinationLabel.setTextColor(ui.color(if (dest != null) R.color.ink else R.color.danger))
+
+        presetButtons.forEach { (choice, button) ->
+            val selected = choice == editor.intent
+            button.background = if (selected) ui.round(R.color.accent_surface, 12, R.color.accent)
+            else ui.round(R.color.field, 12, R.color.line)
+        }
         custom.visibility = if (editor.intent == FilterEditor.Intent.CUSTOM) View.VISIBLE else View.GONE
         combination.visibility = if (rules.includeKeywords.isNotEmpty() && rules.requireDigits) View.VISIBLE else View.GONE
         optional.visibility = if (rules.enabled) View.VISIBLE else View.GONE
         excludeFields.visibility = if (excludeOpen) View.VISIBLE else View.GONE
         senderFields.visibility = if (senderOpen) View.VISIBLE else View.GONE
-        excludeSummary.text = if (rules.excludeKeywords.isEmpty()) "尚未设置，不排除任何内容" else rules.excludeKeywords.joinToString("、")
-        senderSummary.text = if (rules.allowedSenders.isEmpty()) "尚未设置，接收所有号码" else rules.allowedSenders.joinToString("、")
-        summary.text = FilterDescriptions.describe(rules)
-        dirty.text = if (editor.isDirty || invalidSaved) "修改未保存 · 现在收短信仍按原设置处理" else "当前已保存"
-        save.text = if (rules.enabled) "保存并生效" else "保存为全部转发"
+        ui.rotateChevron(excludeChevron, excludeOpen)
+        ui.rotateChevron(senderChevron, senderOpen)
+        excludeSummary.text = if (rules.excludeKeywords.isEmpty()) "未设置（不排除任何内容）" else "排除：${rules.excludeKeywords.joinToString("、")}"
+        senderSummary.text = if (rules.allowedSenders.isEmpty()) "未设置（接收所有号码）" else "仅限：${rules.allowedSenders.joinToString("、")}"
+
+        val destPrefix = if (dest != null) "发往 ${dest.type.displayName}「${dest.name}」：" else ""
+        val statusSuffix = if (!draftEnabled) "（当前已关闭，不会触发转发）" else ""
+        summary.text = destPrefix + FilterDescriptions.describe(rules) + statusSuffix
+
+        val unsaved = isRuleDirty() || invalidSaved
+        ui.styleBadge(previewBadge, if (unsaved) "草稿预览" else "当前生效", if (unsaved) Ui.Tone.WARNING else Ui.Tone.SUCCESS)
+        dirty.text = if (unsaved) "有未保存修改 · 现在收到的短信仍按旧规则处理" else "当前规则已保存"
+        dirty.setTextColor(ui.color(if (unsaved) R.color.warning else R.color.subtle))
+        save.text = if (editingRuleId == null) "保存新规则" else "保存并生效"
+        errorBox.visibility = if (errorBox.text.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun saveRules() {
-        editor.rules.validationError()?.let { showError(it); return }
-        if (!runCatching { FilterSettings.save(this, editor.rules) }.getOrDefault(false)) {
-            showError("没有保存成功，请检查手机存储空间后重试。")
+        ruleNameLayout.error = null
+        val trimmedName = draftName.trim()
+        val candidate = ForwardRule(
+            id = editingRuleId ?: ConfigStore.newId(),
+            name = trimmedName,
+            enabled = draftEnabled,
+            destinationId = draftDestId,
+            filter = editor.rules,
+        )
+        candidate.validationError(destinations)?.let { msg ->
+            if (trimmedName.isEmpty()) {
+                ruleNameLayout.error = msg
+                ruleNameInput.requestFocus()
+            }
+            showError(msg)
             return
         }
-        Toast.makeText(this, "已保存，只对新短信生效", Toast.LENGTH_LONG).show()
+        synchronized(State.gate) {
+            val current = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig(destinations = destinations))
+            val nextRules = if (editingRuleId != null && current.rules.any { it.id == editingRuleId }) {
+                current.rules.map { if (it.id == editingRuleId) candidate else it }
+            } else {
+                current.rules + candidate
+            }
+            val nextConfig = current.copy(rules = nextRules)
+            nextConfig.validationError()?.let { showError(it); return }
+            if (!ConfigStore.save(this, nextConfig)) {
+                showError("没有保存成功，请检查手机存储空间后重试。")
+                return
+            }
+        }
+        Toast.makeText(this, "规则「$trimmedName」已保存", Toast.LENGTH_LONG).show()
         finish()
     }
+
     private fun showError(message: String) {
-        error.text = message
+        errorBox.text = message
+        errorBox.visibility = View.VISIBLE
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
-    @Deprecated("原生 Activity 使用此回调处理旧版 Android 返回")
-    override fun onBackPressed() { requestExit() }
+
     private fun requestExit() {
-        if (!editor.isDirty) { finish(); return }
+        if (!isRuleDirty()) { finish(); return }
         if (abandonDialog?.isShowing == true) return
-        abandonDialog = AlertDialog.Builder(this).setTitle("还没保存修改")
+        abandonDialog = ui.dialog().setTitle("还没保存修改")
             .setMessage("离开后，这次修改不会生效。")
             .setPositiveButton("放弃修改") { _, _ -> finish() }
             .setNegativeButton("继续编辑", null).show()
@@ -266,109 +502,129 @@ class FilterActivity : Activity() {
 
     private fun showTest() {
         if (testOpen) return
-        // 上次的结果只对当时的规则有效，改完设置不能继续显示旧结论。
         if (testRules != editor.rules) testResult = ""
         testOpen = true
-        val scroll = ScrollView(this)
-        val content = ui.column().apply { setPadding(ui.dp(20), ui.dp(8), ui.dp(20), ui.dp(16)) }
-        content.addView(ui.text("按当前尚未保存的设置，在本机判断；不保存、不发送。", 14f, R.color.muted))
-        ui.gap(content, 12)
-        content.addView(ui.text("发件号码 · 可不填", 14f, bold = true))
-        val sender = field(R.id.filter_test_sender, "例如：106123456", testSender, true)
-        ui.gap(content, 8); content.addView(sender)
-        ui.gap(content, 12)
-        content.addView(ui.text("短信正文", 14f, bold = true))
-        val body = field(R.id.filter_test_body, "在这里输入一条短信", testBody)
-        ui.gap(content, 8); content.addView(body)
-        val previousTint = when {
-            testResult.startsWith("这条短信会转发") -> R.color.success
-            testResult.startsWith("这条短信不会转发") || testResult.startsWith("设置有误") -> R.color.danger
-            else -> R.color.muted
-        }
-        val result = ui.text(testResult.ifEmpty { "还没试算" }, 15f, previousTint).apply {
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-        }
-        ui.gap(content, 8)
-        content.addView(ui.button("选一条样例") {
-            val labels = arrayOf("验证码短信", "仅含六位数字", "含“银行”字样", "仅含七位数字", "普通通知")
-            val samples = arrayOf("【示例】验证码为123456，请忽略本测试短信。", "【示例】您的订单编号为123456。", "【银行】验证码为123456，请忽略本测试短信。", "【示例】您的订单编号为1234567。", "【示例】这是一条普通通知，请忽略。")
-            AlertDialog.Builder(this).setTitle("选择样例").setItems(labels) { _, which ->
-                sender.setText("106123456"); body.setText(samples[which])
-            }.setNegativeButton("取消", null).show()
-        })
-        ui.gap(content, 8)
-        content.addView(ui.button("看看会不会转发", primary = true) {
-            val validation = editor.rules.validationError()
-            if (validation != null) {
-                testResult = "设置有误：$validation"
-                result.setTextColor(ui.color(R.color.danger))
-            } else if (body.text.isEmpty()) {
-                body.error = "先输入一条测试短信"; return@button
-            } else {
-                val decision = editor.rules.evaluate(sender.text.toString(), body.text.toString())
-                testRules = editor.rules
-                testResult = (if (decision.allowed) "这条短信会转发" else "这条短信不会转发") + "\n" + decision.reason
-                result.setTextColor(ui.color(if (decision.allowed) R.color.success else R.color.danger))
+        val sheet = ui.bottomSheet("试一条短信", "按当前草稿在本机试算，不保存、不联网发送。") { bodyLayout, _, scroll ->
+            val (senderLayout, sender) = ui.textField(
+                stableId = R.id.filter_test_sender,
+                label = "发件号码 · 选填",
+                placeholder = "例如：106123456",
+                value = testSender,
+                singleLine = true
+            )
+            bodyLayout.addView(senderLayout)
+            ui.gap(bodyLayout, 6)
+            bodyLayout.addView(ui.row().apply {
+                addView(View(this@FilterActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                addView(ui.ghostButton("填入示例短信") {
+                    val labels = arrayOf("验证码短信", "仅含六位数字", "含“银行”字样", "仅含七位数字", "普通通知")
+                    val samples = arrayOf(
+                        "【示例】验证码为123456，请忽略本测试短信。",
+                        "【示例】您的订单编号为123456。",
+                        "【银行】验证码为123456，请忽略本测试短信。",
+                        "【示例】您的订单编号为1234567。",
+                        "【示例】这是一条普通通知，请忽略。"
+                    )
+                    ui.dialog().setTitle("选择示例短信").setItems(labels) { _, which ->
+                        sender.setText("106123456")
+                        bodyLayout.findViewById<EditText>(R.id.filter_test_body).setText(samples[which])
+                    }.setNegativeButton("取消", null).show()
+                })
+            })
+            val (smsLayout, body) = ui.textField(
+                stableId = R.id.filter_test_body,
+                label = "短信正文 *",
+                placeholder = "在这里输入一条测试短信",
+                value = testBody,
+                singleLine = false
+            )
+            bodyLayout.addView(smsLayout)
+
+            val result = ui.text("", 14f, R.color.muted).apply {
+                accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12))
+                layoutParams = LinearLayout.LayoutParams(-1, -2)
             }
-            result.text = testResult
-            scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
-        })
-        ui.gap(content, 12); content.addView(result)
-        sender.watch { testSender = it; testResult = ""; result.text = "内容已变化，请重新试算"; result.setTextColor(ui.color(R.color.muted)) }
-        body.watch { testBody = it; testResult = ""; result.text = "内容已变化，请重新试算"; result.setTextColor(ui.color(R.color.muted)) }
-        scroll.addView(content)
-        val dialog = AlertDialog.Builder(this).setTitle("试一条短信").setView(scroll)
-            .setPositiveButton("回到设置", null).setOnDismissListener { testOpen = false }.show()
-        dialog.window?.setBackgroundDrawable(ui.round(R.color.surface, 20))
-        if (testResult.isNotEmpty()) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            fun styleResult(text: String) {
+                result.text = text.ifEmpty { "输入短信后点击下方按钮查看判断结果" }
+                val tone = when {
+                    text.startsWith("这条短信会转发") -> Ui.Tone.SUCCESS
+                    text.startsWith("这条短信不会转发") || text.startsWith("设置有误") -> Ui.Tone.DANGER
+                    else -> Ui.Tone.NEUTRAL
+                }
+                result.setTextColor(ui.color(tone.ink))
+                result.background = ui.round(tone.surface, 12)
+            }
+            styleResult(testResult)
+
+            ui.gap(bodyLayout, 10)
+            bodyLayout.addView(ui.button("看看会不会转发", primary = true) {
+                smsLayout.error = null
+                val validation = editor.rules.validationError()
+                val text = body.text?.toString().orEmpty()
+                if (validation != null) {
+                    testResult = "设置有误：$validation"
+                } else if (text.isEmpty()) {
+                    smsLayout.error = "先输入一条测试短信"
+                    body.requestFocus()
+                    return@button
+                } else {
+                    val decision = editor.rules.evaluate(sender.text?.toString().orEmpty(), text)
+                    testRules = editor.rules
+                    testResult = (if (decision.allowed) "这条短信会转发" else "这条短信不会转发") + "\n" + decision.reason
+                }
+                styleResult(testResult)
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            })
+            ui.gap(bodyLayout, 12)
+            bodyLayout.addView(result)
+            sender.watch { testSender = it; testResult = ""; styleResult("内容已变化，请重新试算") }
+            body.watch { testBody = it; smsLayout.error = null; testResult = ""; styleResult("内容已变化，请重新试算") }
+            if (testResult.isNotEmpty()) scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        }
+        sheet.setOnDismissListener { testOpen = false }
+        sheet.show()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("savedName", savedName)
+        outState.putBoolean("savedEnabled", savedEnabled)
+        outState.putString("savedDestId", savedDestId)
+        outState.putString("draftName", draftName)
+        outState.putBoolean("draftEnabled", draftEnabled)
+        outState.putString("draftDestId", draftDestId)
         outState.putBundle("savedRules", writeRules(editor.saved))
         outState.putBundle("draftRules", writeRules(editor.rules))
         outState.putString("intent", editor.intent.name)
         outState.putBoolean("invalidSaved", invalidSaved)
         outState.putBoolean("excludeOpen", excludeOpen); outState.putBoolean("senderOpen", senderOpen)
-        outState.putString("includeRaw", include.text.toString()); outState.putString("excludeRaw", exclude.text.toString()); outState.putString("sendersRaw", senders.text.toString())
+        outState.putString("includeRaw", include.text?.toString().orEmpty())
+        outState.putString("excludeRaw", exclude.text?.toString().orEmpty())
+        outState.putString("sendersRaw", senders.text?.toString().orEmpty())
         outState.putBoolean("testOpen", testOpen); outState.putString("testSender", testSender); outState.putString("testBody", testBody); outState.putString("testResult", testResult)
         testRules?.let { outState.putBundle("testRules", writeRules(it)) }
         super.onSaveInstanceState(outState)
     }
+
     private fun writeRules(rules: FilterRules) = Bundle().apply {
         putBoolean("enabled", rules.enabled); putBoolean("digits", rules.requireDigits); putBoolean("all", rules.matchAll)
         putStringArrayList("include", ArrayList(rules.includeKeywords)); putStringArrayList("exclude", ArrayList(rules.excludeKeywords)); putStringArrayList("senders", ArrayList(rules.allowedSenders))
     }
-    private fun readRules(bundle: Bundle) = FilterRules(bundle.getBoolean("enabled"), bundle.getStringArrayList("include").orEmpty(), bundle.getBoolean("digits"), bundle.getBoolean("all"), bundle.getStringArrayList("exclude").orEmpty(), bundle.getStringArrayList("senders").orEmpty())
 
-    private fun EditText.watch(changed: (String) -> Unit) { addTextChangedListener(object : TextWatcher {
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { if (!binding) changed(s.toString()) }
-        override fun afterTextChanged(s: Editable?) = Unit
-    }) }
-    private fun field(stableId: Int, placeholder: String, value: String, singleLine: Boolean = false) = EditText(this).apply {
-        id = stableId; hint = placeholder; setText(value); textSize = 15f
-        setTextColor(ui.color(R.color.ink)); setHintTextColor(ui.color(R.color.muted))
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        inputType = InputType.TYPE_CLASS_TEXT or if (singleLine) InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS else InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        if (singleLine) setSingleLine(true) else { minLines = 2; maxLines = 5 }
-        minHeight = ui.dp(52); setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12))
-        background = ui.round(R.color.field, 10, R.color.line)
-        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-        isSaveEnabled = false
-        layoutParams = LinearLayout.LayoutParams(-1, -2)
-    }
-    private fun radio(label: String, stableId: Int) = RadioButton(this).apply {
-        id = stableId; textSize = 15f; setTextColor(ui.color(R.color.ink))
-        val split = label.indexOf('\n')
-        text = SpannableString(label).apply {
-            setSpan(StyleSpan(Typeface.BOLD), 0, if (split < 0) length else split, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            if (split >= 0) {
-                setSpan(RelativeSizeSpan(.86f), split + 1, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                setSpan(ForegroundColorSpan(ui.color(R.color.muted)), split + 1, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-        setPadding(0, ui.dp(4), 0, ui.dp(4))
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = ui.dp(6) }
-        minHeight = ui.dp(48); isSaveEnabled = false
+    private fun readRules(bundle: Bundle) = FilterRules(
+        bundle.getBoolean("enabled"),
+        bundle.getStringArrayList("include").orEmpty(),
+        bundle.getBoolean("digits"),
+        bundle.getBoolean("all"),
+        bundle.getStringArrayList("exclude").orEmpty(),
+        bundle.getStringArrayList("senders").orEmpty()
+    )
+
+    private fun EditText.watch(changed: (String) -> Unit) {
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { if (!binding) changed(s.toString()) }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
     }
 }
