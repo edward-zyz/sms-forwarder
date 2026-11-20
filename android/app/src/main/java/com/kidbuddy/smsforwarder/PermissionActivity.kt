@@ -119,7 +119,7 @@ class PermissionActivity : AppCompatActivity() {
             }
         } else Triple("缺权限", R.color.danger, "缺少查看网络状态的权限")
 
-        content.addView(ui.card(padH = 18, padV = 4) {
+        content.addView(ui.listCard {
             addView(checkRow(
                 iconRes = R.drawable.ic_bolt,
                 tileColorRes = R.color.tile_blue,
@@ -129,7 +129,7 @@ class PermissionActivity : AppCompatActivity() {
                 detail = if (restricted) "系统已限制后台活动，建议允许后台运行" else "系统未限制本应用的后台活动"
             ) { openSettings() })
 
-            ui.insetDivider(this, startDp = 44)
+            ui.insetDivider(this, startDp = 62, endDp = 18)
 
             addView(checkRow(
                 iconRes = R.drawable.ic_battery,
@@ -140,7 +140,7 @@ class PermissionActivity : AppCompatActivity() {
                 detail = if (exempt) "已加入白名单，休眠时也能及时发送" else "锁屏休眠时可能延迟送达"
             ) { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) })
 
-            ui.insetDivider(this, startDp = 44)
+            ui.insetDivider(this, startDp = 62, endDp = 18)
 
             addView(checkRow(
                 iconRes = R.drawable.ic_network,
@@ -151,7 +151,7 @@ class PermissionActivity : AppCompatActivity() {
                 detail = dataInfo.third
             ) { openSettings(Intent(Settings.ACTION_IGNORE_BACKGROUND_DATA_RESTRICTIONS_SETTINGS, packageUri)) })
 
-            ui.insetDivider(this, startDp = 44)
+            ui.insetDivider(this, startDp = 62, endDp = 18)
 
             addView(checkRow(
                 iconRes = R.drawable.ic_shield,
@@ -163,33 +163,37 @@ class PermissionActivity : AppCompatActivity() {
             ) { openSettings(Intent(Settings.ACTION_SETTINGS)) })
         })
 
-        // 第二层补充：国产手机放行提示
+        // 第二层补充：国产手机放行提示（纯白大圆角 + 克制琥珀竖条）
         ui.sectionTitle(content, "国产手机放行提示", "收不到验证码或后台延迟时，请依次检查以下 3 项")
-        content.addView(ui.card(fill = R.color.warning_surface, border = R.color.line, padH = 16, padV = 14) {
+        content.addView(ui.card(padH = 18, padV = 16) {
             addView(ui.row().apply {
-                addView(ui.text("关键放行步骤", 15f, R.color.warning, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
-                addView(ui.badge("必读", Ui.Tone.WARNING))
+                addView(android.view.View(this@PermissionActivity).apply {
+                    background = ui.round(R.color.warning, 99)
+                    layoutParams = LinearLayout.LayoutParams(ui.dp(3), ui.dp(14)).apply { marginEnd = ui.dp(8) }
+                })
+                addView(ui.text("关键放行步骤", 15f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(ui.valueText("必读", R.color.warning))
             })
-            ui.gap(this, 8)
+            ui.gap(this, 10)
             addView(ui.text(
                 "① Android 13–15 侧载安装：若短信权限无法勾选，请在「应用信息」右上角菜单「⋮」点击「允许受限制的设置」后再返回授权。",
-                13.5f, R.color.ink
+                13.5f, R.color.muted
             ))
             ui.gap(this, 6)
             addView(ui.text(
                 "② 华为 / 小米 / OPPO / vivo：请在系统短信或安全中心关闭「验证码安全保护」；小米 / 红米机型还需放行「通知类短信」权限。",
-                13.5f, R.color.ink
+                13.5f, R.color.muted
             ))
             ui.gap(this, 6)
             addView(ui.text(
                 "③ 后台省电与自启动：将本应用的省电策略设为「无限制」并允许「自启动」，避免锁屏休眠后验证码延迟送达。",
-                13.5f, R.color.ink
+                13.5f, R.color.muted
             ))
-            ui.gap(this, 12)
+            ui.gap(this, 14)
             addView(ui.button("打开应用信息设置") { openSettings() })
         })
 
-        // 第三层：系统基础权限（紧凑折叠卡）
+        // 第三层：系统基础权限（0 内边距卡片 + cell 满宽按压态）
         val basics = listOf(
             Manifest.permission.INTERNET to "访问互联网 · 将短信推送到目的地",
             Manifest.permission.ACCESS_NETWORK_STATE to "查看网络状态 · 断网恢复后自动重试",
@@ -200,10 +204,10 @@ class PermissionActivity : AppCompatActivity() {
         val expanded = showBasicDetails || !allBasicOk
 
         ui.sectionTitle(content, "系统基础权限")
-        content.addView(ui.card(padH = 16, padV = 12) {
+        content.addView(ui.listCard {
             addView(ui.row().apply {
-                background = ui.transparentRipple(8)
-                setPadding(0, ui.dp(2), 0, ui.dp(2))
+                background = ui.transparentRipple(0)
+                setPadding(ui.dp(18), ui.dp(14), ui.dp(18), ui.dp(14))
                 addView(ui.column().apply {
                     addView(ui.text("联网与队列恢复权限", 15f, bold = true))
                     ui.gap(this, 2)
@@ -229,9 +233,10 @@ class PermissionActivity : AppCompatActivity() {
 
             if (expanded) {
                 for ((permission, purpose) in basics) {
-                    ui.divider(this, top = 10, bottom = 8)
+                    ui.insetDivider(this, startDp = 18, endDp = 18)
                     val allowed = granted(permission)
                     addView(ui.row().apply {
+                        setPadding(ui.dp(18), ui.dp(11), ui.dp(18), ui.dp(11))
                         addView(ui.text(purpose, 13.5f, R.color.muted), LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) })
                         addView(ui.valueText(
                             if (allowed) "已授予" else "缺失",
@@ -252,9 +257,9 @@ class PermissionActivity : AppCompatActivity() {
         detail: String,
         action: () -> Unit
     ) = ui.row().apply {
-        minimumHeight = ui.dp(62)
-        setPadding(0, ui.dp(12), 0, ui.dp(12))
-        background = ui.transparentRipple(10)
+        minimumHeight = ui.dp(64)
+        setPadding(ui.dp(18), ui.dp(13), ui.dp(18), ui.dp(13))
+        background = ui.transparentRipple(0)
         addView(ui.iconTile(iconRes, tileColorRes, sizeDp = 32, iconSizeDp = 17, radiusDp = 9))
         addView(ui.column().apply {
             addView(ui.text(name, 15.5f, bold = true))

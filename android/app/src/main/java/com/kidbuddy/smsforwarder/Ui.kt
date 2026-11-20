@@ -208,6 +208,10 @@ class Ui(private val context: Context) {
         }
     }
 
+    /** 专为可点击分组列表打造的 0 内边距纯白圆角卡，确保 cell 按压水波纹从左到右 100% 铺满并自然贴合卡片圆角。 */
+    fun listCard(bottomMargin: Int = 14, block: LinearLayout.() -> Unit = {}): MaterialCardView =
+        card(fill = R.color.surface, border = null, padH = 0, padV = 0, bottomMargin = bottomMargin, block = block)
+
     fun styleCard(card: MaterialCardView, fill: Int, border: Int? = null) {
         card.setCardBackgroundColor(color(fill))
         card.strokeWidth = if (border != null) dp(1) else 0
@@ -382,11 +386,12 @@ class Ui(private val context: Context) {
     }
 
     /** 避开左侧图标底块的发丝级内缩分割线（HyperOS / iOS 设置列表灵魂细节）。 */
-    fun insetDivider(parent: LinearLayout, startDp: Int = 44, top: Int = 0, bottom: Int = 0) {
+    fun insetDivider(parent: LinearLayout, startDp: Int = 62, endDp: Int = 18, top: Int = 0, bottom: Int = 0) {
         parent.addView(
             View(context).apply { setBackgroundColor(color(R.color.line)) },
             LinearLayout.LayoutParams(-1, 1).apply {
                 marginStart = dp(startDp)
+                marginEnd = dp(endDp)
                 topMargin = dp(top)
                 bottomMargin = dp(bottom)
             }

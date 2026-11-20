@@ -353,10 +353,10 @@ class FilterActivity : AppCompatActivity() {
         }
         content.addView(custom)
 
-        // 第五层：附加限制（分组折叠卡片）
+        // 第五层：附加限制（0 内边距卡片 + cell 满宽按压态）
         optional = ui.column()
         ui.sectionTitle(optional, "附加限制 · 选填", "在上面条件基础上进一步缩小范围")
-        optional.addView(ui.card(padH = 16, padV = 6) {
+        optional.addView(ui.listCard {
             ui.enableMotion(this)
             excludeSummary = ui.text("", 13f, R.color.muted)
             excludeChevron = ui.chevronDown(R.color.accent)
@@ -365,7 +365,7 @@ class FilterActivity : AppCompatActivity() {
                 render()
             })
             excludeFields = ui.column().apply {
-                setPadding(0, 0, 0, ui.dp(12))
+                setPadding(ui.dp(18), 0, ui.dp(18), ui.dp(14))
                 val (el, ei) = ui.textField(
                     stableId = R.id.filter_exclude,
                     label = "排除关键词",
@@ -379,7 +379,7 @@ class FilterActivity : AppCompatActivity() {
             }
             addView(excludeFields)
 
-            ui.divider(this, top = 2, bottom = 2)
+            ui.insetDivider(this, startDp = 18, endDp = 18)
 
             senderSummary = ui.text("", 13f, R.color.muted)
             senderChevron = ui.chevronDown(R.color.accent)
@@ -388,7 +388,7 @@ class FilterActivity : AppCompatActivity() {
                 render()
             })
             senderFields = ui.column().apply {
-                setPadding(0, 0, 0, ui.dp(12))
+                setPadding(ui.dp(18), 0, ui.dp(18), ui.dp(14))
                 val (sl, si) = ui.textField(
                     stableId = R.id.filter_senders,
                     label = "允许的发件号码",
@@ -484,9 +484,9 @@ class FilterActivity : AppCompatActivity() {
             draftDestId != savedDestId
 
     private fun collapsibleHeader(title: String, summaryView: TextView, chevronView: ImageView, onClick: () -> Unit) = ui.row().apply {
-        minimumHeight = ui.dp(58)
-        setPadding(0, ui.dp(10), 0, ui.dp(10))
-        background = ui.ripple(R.color.surface, 10)
+        minimumHeight = ui.dp(60)
+        setPadding(ui.dp(18), ui.dp(13), ui.dp(18), ui.dp(13))
+        background = ui.transparentRipple(0)
         addView(ui.column().apply {
             addView(ui.text(title, 15f, bold = true))
             ui.gap(this, 2)
