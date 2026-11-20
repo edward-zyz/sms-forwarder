@@ -36,19 +36,15 @@
   </tr>
 </table>
 
-<!--
-## 效果与操作演示
+## 视频介绍与操作教程
 
-录好介绍视频（20–30 秒）或配置操作视频（约 60 秒）后：
-1. 在 GitHub 仓库任意 Issue 编辑框直接拖入 .mp4 / .mov，拿到 https://github.com/user-attachments/assets/... 链接
-2. 取消本段注释，把链接单独占一行粘贴在下方，GitHub 会自动渲染为原生可播放视频：
+### 项目介绍（核心场景与安全边界）
 
-### 30 秒效果演示（收到验证码 → 2 秒弹出群聊）
-https://github.com/user-attachments/assets/替换为你的介绍视频ID
+https://github.com/user-attachments/assets/0dfb534f-1d6a-4a3f-a0d3-fdf8b371f5cc
 
-### 1 分钟配置实操（建群机器人 → 勾商家模板 → 试短信）
-https://github.com/user-attachments/assets/替换为你的操作视频ID
--->
+### 从零配置操作教程（建群机器人 · 选模板 · 真机验证 · 国产机放行）
+
+https://github.com/user-attachments/assets/50dccb40-63f2-487b-a882-928bab247eb6
 
 ## 为什么敢用它转验证码
 
