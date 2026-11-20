@@ -18,6 +18,38 @@
 
 > **iPhone 使用边界**：受 iOS 系统机制限制，快捷指令方案仅处理「信息」自动化触发时传入的短信正文，无法主动监听或读取收件箱历史短信，不建议作为 7×24 小时无人值守接码机。
 
+### 扫码下载 Android 最新正式版
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/assets/qr-android-latest.svg" width="168" alt="Android 最新正式版 APK 下载二维码" />
+    </td>
+    <td>
+      <strong>永久有效，发新版自动指向最新 Release</strong><br /><br />
+      <ul>
+        <li>推荐使用手机自带相机或系统浏览器扫码直接下载安装</li>
+        <li>微信内扫码若被拦截，请点右上角 <code>···</code> → <strong>在浏览器中打开</strong></li>
+        <li>覆盖升级保留已有规则、目的地配置与待发队列，无需卸载旧版</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+<!--
+## 效果与操作演示
+
+录好介绍视频（20–30 秒）或配置操作视频（约 60 秒）后：
+1. 在 GitHub 仓库任意 Issue 编辑框直接拖入 .mp4 / .mov，拿到 https://github.com/user-attachments/assets/... 链接
+2. 取消本段注释，把链接单独占一行粘贴在下方，GitHub 会自动渲染为原生可播放视频：
+
+### 30 秒效果演示（收到验证码 → 2 秒弹出群聊）
+https://github.com/user-attachments/assets/替换为你的介绍视频ID
+
+### 1 分钟配置实操（建群机器人 → 勾商家模板 → 试短信）
+https://github.com/user-attachments/assets/替换为你的操作视频ID
+-->
+
 ## 为什么敢用它转验证码
 
 验证码属于高敏感信息，口头承诺“开源安全”远远不够。本项目在权限、依赖、数据驻留与构建链路四个层面做减法，每一项都可直接在源码和产物中核验：
