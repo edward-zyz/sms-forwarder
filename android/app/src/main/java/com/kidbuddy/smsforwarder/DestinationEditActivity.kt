@@ -44,7 +44,7 @@ class DestinationEditActivity : AppCompatActivity() {
             ?: existing?.type ?: DestinationType.FEISHU
 
         val root = ui.column().apply { setBackgroundColor(ui.color(R.color.page)) }
-        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(16)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(10), ui.dp(18), ui.dp(20)) }
         ui.enableMotion(content)
         val scroll = ScrollView(this).apply {
             id = R.id.dest_edit_scroll

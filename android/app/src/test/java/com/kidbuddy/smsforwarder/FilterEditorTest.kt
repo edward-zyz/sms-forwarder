@@ -89,4 +89,18 @@ class FilterEditorTest {
     @Test fun listEntrySupportsNewlinesAndBothCommaStyles() {
         assertEquals(listOf("验证码", "OTP", "取餐码"), FilterEditor.parseList(" 验证码\nOTP,取餐码，验证码\n\n"))
     }
+
+    @Test fun applyingPlatformTemplatesSwitchesToCustomAndEnablesThreeStageProtection() {
+        val saved = FilterRules()
+        val editor = FilterEditor(saved)
+        editor.applyPlatformTemplates(setOf("meituan", "pdd"))
+        assertEquals(FilterEditor.Intent.CUSTOM, editor.intent)
+        assertTrue(editor.rules.enabled)
+        assertTrue(editor.rules.requireCodeWord)
+        assertTrue(editor.rules.requireDigits)
+        assertTrue(editor.rules.matchAll)
+        assertEquals(listOf("美团", "开店宝", "美团外卖", "拼多多"), editor.rules.includeKeywords)
+        assertEquals(PlatformTemplates.DEFAULT_EXCLUDE_KEYWORDS, editor.rules.excludeKeywords)
+        assertEquals(FilterEditor.Intent.CUSTOM, FilterEditor.identify(editor.rules))
+    }
 }

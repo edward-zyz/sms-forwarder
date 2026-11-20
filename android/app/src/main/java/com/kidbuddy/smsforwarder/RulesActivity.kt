@@ -17,7 +17,7 @@ class RulesActivity : AppCompatActivity() {
         AppAppearance.apply(this)
         super.onCreate(savedInstanceState)
         ui = Ui(this)
-        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(28)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(10), ui.dp(18), ui.dp(28)) }
         val scroll = ScrollView(this).apply {
             id = R.id.rules_scroll
             isFillViewport = true
@@ -89,13 +89,19 @@ class RulesActivity : AppCompatActivity() {
         ui.sectionTitle(listContainer, "全部规则（${config.rules.size}）")
         config.rules.forEach { rule ->
             val dest = config.destinationById(rule.destinationId)
-            listContainer.addView(ui.card(padH = 16, padV = 14) {
+            val tileColor = when {
+                dest == null -> R.color.danger
+                rule.enabled -> R.color.tile_indigo
+                else -> R.color.tile_gray
+            }
+            listContainer.addView(ui.card(padH = 18, padV = 16) {
                 addView(ui.row().apply {
+                    addView(ui.iconTile(R.drawable.ic_filter, tileColor, sizeDp = 36, iconSizeDp = 18, radiusDp = 10))
                     addView(ui.column().apply {
-                        addView(ui.text(rule.name, 17f, bold = true))
-                        ui.gap(this, 6)
-                        val destText = if (dest != null) "发往 · ${dest.type.displayName}「${dest.name}」" else "目的地无效，请重新选择"
-                        addView(ui.badge(destText, if (dest != null) Ui.Tone.ACCENT else Ui.Tone.DANGER))
+                        addView(ui.text(rule.name, 16f, bold = true))
+                        ui.gap(this, 2)
+                        val destText = if (dest != null) "发往 ${dest.type.displayName}「${dest.name}」" else "目的地无效，请重新选择"
+                        addView(ui.text(destText, 12.5f, if (dest != null) R.color.subtle else R.color.danger))
                     }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) })
                     val toggle = ui.switch(rule.enabled, "启用规则 ${rule.name}").apply {
                         setOnCheckedChangeListener { _, checked ->
@@ -106,10 +112,10 @@ class RulesActivity : AppCompatActivity() {
                     addView(toggle)
                 })
                 ui.gap(this, 10)
-                addView(ui.text(FilterDescriptions.describe(rule.filter), 14f, R.color.muted))
-                ui.divider(this, top = 12, bottom = 10)
+                addView(ui.text(FilterDescriptions.describe(rule.filter), 13.5f, R.color.muted))
+                ui.divider(this, top = 12, bottom = 6)
                 addView(ui.row().apply {
-                    addView(ui.button("编辑规则", compact = true) {
+                    addView(ui.ghostButton("编辑规则", R.color.ink) {
                         startActivity(Intent(this@RulesActivity, FilterActivity::class.java).apply {
                             putExtra(FilterActivity.EXTRA_RULE_ID, rule.id)
                         })

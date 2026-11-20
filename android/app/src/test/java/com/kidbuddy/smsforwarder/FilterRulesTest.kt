@@ -123,4 +123,20 @@ class FilterRulesTest {
             listOf("私密词", "123456", "13800138000", "13900139000", "秘密正文").forEach { assertFalse(result.reason.contains(it)) }
         }
     }
+
+    @Test fun requireCodeWordBlocksPromoNumbersAndMatchesCodeWordCaseInsensitively() {
+        val rules = FilterRules(
+            enabled = true,
+            includeKeywords = listOf("美团", "开店宝"),
+            requireDigits = true,
+            matchAll = true,
+            requireCodeWord = true,
+        )
+        assertFalse(rules.evaluate("10690001", "【美团】领 8888 元满减券").allowed)
+        assertFalse(rules.evaluate("10690001", "【美团】验证码已发送，请注意查收").allowed)
+        assertFalse(rules.evaluate("10690001", "【其他平台】验证码 123456").allowed)
+        for (word in listOf("验证码", "动态码", "校验码", "安全码", "确认码", "登录码", "CODE", "Code")) {
+            assertTrue(word, rules.evaluate("10690001", "【美团】您的 $word 是 618294").allowed)
+        }
+    }
 }

@@ -17,7 +17,7 @@ class DestinationsActivity : AppCompatActivity() {
         AppAppearance.apply(this)
         super.onCreate(savedInstanceState)
         ui = Ui(this)
-        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(28)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(10), ui.dp(18), ui.dp(28)) }
         val scroll = ScrollView(this).apply {
             id = R.id.destinations_scroll
             isFillViewport = true
@@ -28,11 +28,11 @@ class DestinationsActivity : AppCompatActivity() {
 
         content.addView(ui.topBar("转发目的地") { finish() })
         content.addView(ui.text("支持飞书、企业微信、钉钉和自定义 HTTPS Webhook，添加后可在规则中绑定。", 13f, R.color.muted))
-        ui.gap(content, 14)
+        ui.gap(content, 12)
         content.addView(ui.button("添加目的地", primary = true) {
             startActivity(Intent(this, DestinationEditActivity::class.java))
         })
-        ui.gap(content, 16)
+        ui.gap(content, 14)
 
         listContainer = ui.column()
         content.addView(listContainer)
@@ -47,17 +47,17 @@ class DestinationsActivity : AppCompatActivity() {
         listContainer.removeAllViews()
         val configResult = runCatching { ConfigStore.load(this) }
         if (configResult.isFailure) {
-            listContainer.addView(ui.card(R.color.danger_surface, border = R.color.line) {
-                addView(ui.text("配置读取异常，请检查或重新添加目的地。", 14f, R.color.danger, bold = true))
+            listContainer.addView(ui.card {
+                addView(ui.text("配置读取异常，请检查或重新添加目的地。", 14f, R.color.danger))
             })
             return
         }
         val config = configResult.getOrThrow()
         if (config.destinations.isEmpty()) {
             listContainer.addView(ui.card {
-                addView(ui.text("还没有转发目的地", 17f, bold = true))
+                addView(ui.text("还没有转发目的地", 16f, bold = true))
                 ui.gap(this, 6)
-                addView(ui.text("点击上方「添加目的地」，可配置飞书、企业微信、钉钉或自定义 Webhook 机器人。", 14f, R.color.muted))
+                addView(ui.text("点击上方「添加目的地」，可配置飞书、企业微信、钉钉或自定义 Webhook 机器人。", 13.5f, R.color.muted))
             })
             return
         }
@@ -65,27 +65,35 @@ class DestinationsActivity : AppCompatActivity() {
         ui.sectionTitle(listContainer, "已添加目的地（${config.destinations.size}）")
         config.destinations.forEach { dest ->
             val refCount = config.rules.count { it.destinationId == dest.id }
-            listContainer.addView(ui.card(padH = 16, padV = 14) {
+            val tileColor = when (dest.type) {
+                DestinationType.FEISHU -> R.color.tile_blue
+                DestinationType.WECOM -> R.color.tile_green
+                DestinationType.DINGTALK -> R.color.tile_indigo
+                DestinationType.CUSTOM -> R.color.tile_gray
+            }
+            listContainer.addView(ui.card(padH = 18, padV = 16) {
                 addView(ui.row().apply {
-                    addView(ui.text(dest.name, 17f, bold = true), LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) })
-                    addView(ui.badge(dest.type.displayName, Ui.Tone.ACCENT))
+                    addView(ui.iconTile(R.drawable.ic_send, tileColor, sizeDp = 36, iconSizeDp = 18, radiusDp = 10))
+                    addView(ui.column().apply {
+                        addView(ui.text(dest.name, 16f, bold = true))
+                        ui.gap(this, 2)
+                        val secretStatus = when {
+                            !dest.type.supportsSecret -> "无需签名密钥"
+                            dest.secret.isNotBlank() -> "已启用签名校验"
+                            else -> "未设置签名密钥"
+                        }
+                        val refStatus = if (refCount > 0) "正被 $refCount 条规则使用" else "未被规则引用"
+                        addView(ui.text("${dest.type.displayName} · $secretStatus · $refStatus", 12.5f, R.color.subtle))
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
                 })
-                ui.gap(this, 6)
-                val secretStatus = when {
-                    !dest.type.supportsSecret -> "无需签名密钥"
-                    dest.secret.isNotBlank() -> "已启用签名校验"
-                    else -> "未设置签名密钥"
-                }
-                val refStatus = if (refCount > 0) "正被 $refCount 条规则使用" else "未被规则引用"
-                addView(ui.text("地址已隐藏 · $secretStatus · $refStatus", 13f, R.color.muted))
-                ui.divider(this, top = 12, bottom = 10)
+                ui.divider(this, top = 14, bottom = 6)
                 addView(ui.row().apply {
-                    addView(ui.button("编辑", compact = true) {
+                    addView(ui.ghostButton("编辑", R.color.ink) {
                         startActivity(Intent(this@DestinationsActivity, DestinationEditActivity::class.java).apply {
                             putExtra(DestinationEditActivity.EXTRA_DESTINATION_ID, dest.id)
                         })
                     }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = ui.dp(8) })
-                    addView(ui.button("发测试消息", compact = true) { sendTestTo(dest) })
+                    addView(ui.ghostButton("发测试消息", R.color.accent) { sendTestTo(dest) })
                     addView(View(this@DestinationsActivity), LinearLayout.LayoutParams(0, 1, 1f))
                     addView(ui.ghostButton("删除", R.color.danger) { confirmDelete(dest, refCount) })
                 })

@@ -26,6 +26,12 @@ object FilterSettings {
                 require(value is Boolean)
                 return value
             }
+            fun optionalBoolean(name: String, default: Boolean): Boolean {
+                if (!json.has(name)) return default
+                val value = json.get(name)
+                require(value is Boolean)
+                return value
+            }
             fun strings(name: String): List<String> {
                 val values = json.getJSONArray(name)
                 require(values.length() <= FilterRules.MAX_ITEMS)
@@ -35,9 +41,15 @@ object FilterSettings {
                     value
                 }
             }
-            FilterRules(boolean("enabled"), strings("includeKeywords"), boolean("requireDigits"),
-                boolean("matchAll"), strings("excludeKeywords"), strings("allowedSenders"))
-                .also { require(it.validationError() == null) }
+            FilterRules(
+                enabled = boolean("enabled"),
+                includeKeywords = strings("includeKeywords"),
+                requireDigits = boolean("requireDigits"),
+                matchAll = boolean("matchAll"),
+                excludeKeywords = strings("excludeKeywords"),
+                allowedSenders = strings("allowedSenders"),
+                requireCodeWord = optionalBoolean("requireCodeWord", false),
+            ).also { require(it.validationError() == null) }
         } catch (_: Exception) {
             throw IllegalArgumentException("过滤配置异常，请重新保存后再转发")
         }
@@ -48,7 +60,8 @@ object FilterSettings {
         val snapshot = JSONObject().put("version", 1).put("enabled", rules.enabled)
             .put("includeKeywords", JSONArray(rules.includeKeywords)).put("requireDigits", rules.requireDigits)
             .put("matchAll", rules.matchAll).put("excludeKeywords", JSONArray(rules.excludeKeywords))
-            .put("allowedSenders", JSONArray(rules.allowedSenders)).toString()
+            .put("allowedSenders", JSONArray(rules.allowedSenders))
+            .put("requireCodeWord", rules.requireCodeWord).toString()
         if (snapshot.length > MAX_SNAPSHOT_LENGTH) return@synchronized false
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         // 保留原值（包括损坏值），不能把损坏配置恢复成默认放行。

@@ -129,6 +129,7 @@ object ConfigStore {
                 .put("matchAll", r.filter.matchAll)
                 .put("excludeKeywords", JSONArray(r.filter.excludeKeywords))
                 .put("allowedSenders", JSONArray(r.filter.allowedSenders))
+                .put("requireCodeWord", r.filter.requireCodeWord)
             ruleArray.put(
                 JSONObject()
                     .put("id", r.id)
@@ -175,6 +176,12 @@ object ConfigStore {
                 require(value is Boolean)
                 return value
             }
+            fun optionalBoolean(key: String, default: Boolean): Boolean {
+                if (!f.has(key)) return default
+                val value = f.get(key)
+                require(value is Boolean)
+                return value
+            }
             fun strings(key: String): List<String> {
                 val arr = f.getJSONArray(key)
                 require(arr.length() <= FilterRules.MAX_ITEMS)
@@ -191,6 +198,7 @@ object ConfigStore {
                 matchAll = boolean("matchAll"),
                 excludeKeywords = strings("excludeKeywords"),
                 allowedSenders = strings("allowedSenders"),
+                requireCodeWord = optionalBoolean("requireCodeWord", false),
             )
             val ruleEnabled = obj.get("enabled")
             require(ruleEnabled is Boolean)

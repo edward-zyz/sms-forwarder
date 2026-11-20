@@ -3,6 +3,7 @@ package com.kidbuddy.smsforwarder
 import android.animation.LayoutTransition
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
@@ -22,6 +23,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.widget.SwitchCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDragHandleView
@@ -29,12 +31,11 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 
-/** Material 3 组件工厂与统一视觉规范，完整适配浅色/深色主题与无障碍标准。 */
+/** 极简紧致的 MIUI / HyperOS 风格组件工厂（基于 Material 3 底座）。 */
 class Ui(private val context: Context) {
     enum class Tone(val ink: Int, val surface: Int) {
         NEUTRAL(R.color.muted, R.color.neutral_surface),
@@ -57,7 +58,7 @@ class Ui(private val context: Context) {
     fun enableMotion(container: ViewGroup) {
         if (!motionEnabled()) return
         container.layoutTransition = LayoutTransition().apply {
-            setDuration(200L)
+            setDuration(180L)
             enableTransitionType(LayoutTransition.CHANGING)
         }
     }
@@ -66,23 +67,64 @@ class Ui(private val context: Context) {
         view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
     }
 
-    fun round(fill: Int, radius: Int = 18, border: Int? = null, strokeWidthDp: Int = 1) = GradientDrawable().apply {
+    fun round(fill: Int, radius: Int = 16, border: Int? = null, strokeWidthDp: Int = 1) = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = dp(radius).toFloat()
         setColor(color(fill))
         border?.let { setStroke(dp(strokeWidthDp), color(it)) }
     }
 
-    fun ripple(fill: Int, radius: Int = 12, border: Int? = null) =
+    fun ripple(fill: Int = R.color.surface, radius: Int = 12, border: Int? = null) =
         RippleDrawable(colorList(R.color.ripple), round(fill, radius, border), null)
+
+    fun transparentRipple(radius: Int = 12) = RippleDrawable(
+        colorList(R.color.ripple),
+        null,
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(radius).toFloat()
+            setColor(Color.WHITE)
+        }
+    )
 
     fun text(value: String, size: Float = 15f, tint: Int = R.color.ink, bold: Boolean = false) = TextView(context).apply {
         text = value
         textSize = size
         setTextColor(color(tint))
         if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        setLineSpacing(dp(3).toFloat(), 1f)
+        setLineSpacing(dp(2).toFloat(), 1f)
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+
+    /** 设置项右侧的纯净值文本（替代花哨彩色 tag）。 */
+    fun valueText(value: String = "", tint: Int = R.color.subtle) = TextView(context).apply {
+        text = value
+        textSize = 13.5f
+        setTextColor(color(tint))
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+
+    fun setValueText(view: TextView, value: String, tint: Int = R.color.subtle, bold: Boolean = false) {
+        val stateKey = "$value|$tint|$bold"
+        if (view.tag == stateKey) return
+        view.tag = stateKey
+        view.text = value
+        view.setTextColor(color(tint))
+        view.typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+    }
+
+    /** 精致状态指示小圆点（8dp），克制清晰。 */
+    fun statusDot(sizeDp: Int = 8) = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)).apply { marginEnd = dp(8) }
+    }
+
+    fun styleDot(view: View, colorRes: Int) {
+        if (view.tag == colorRes) return
+        view.tag = colorRes
+        view.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color(colorRes))
+        }
     }
 
     fun fieldLabel(title: String, required: Boolean = false, optional: Boolean = false) = TextView(context).apply {
@@ -107,12 +149,32 @@ class Ui(private val context: Context) {
         layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
     }
 
-    fun chevronRight(tint: Int = R.color.subtle) = icon(R.drawable.ic_chevron_right, 18, tint).apply {
-        layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginStart = dp(4) }
+    /** HyperOS / iOS 设置风圆角彩色图标底块：将色彩克制收敛在左侧整齐的图标块内。 */
+    fun iconTile(
+        iconRes: Int,
+        bgColorRes: Int,
+        sizeDp: Int = 32,
+        iconSizeDp: Int = 18,
+        radiusDp: Int = 9
+    ): LinearLayout = LinearLayout(context).apply {
+        gravity = Gravity.CENTER
+        background = round(bgColorRes, radiusDp)
+        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp)).apply { marginEnd = dp(12) }
+        addView(icon(iconRes, iconSizeDp, R.color.on_accent))
     }
 
-    fun chevronDown(tint: Int = R.color.accent) = icon(R.drawable.ic_chevron_down, 18, tint).apply {
-        layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginStart = dp(4) }
+    fun styleIconTile(tile: LinearLayout, bgColorRes: Int, radiusDp: Int = 11) {
+        if (tile.tag == bgColorRes) return
+        tile.tag = bgColorRes
+        tile.background = round(bgColorRes, radiusDp)
+    }
+
+    fun chevronRight(tint: Int = R.color.subtle) = icon(R.drawable.ic_chevron_right, 16, tint).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginStart = dp(4) }
+    }
+
+    fun chevronDown(tint: Int = R.color.subtle) = icon(R.drawable.ic_chevron_down, 16, tint).apply {
+        layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginStart = dp(4) }
     }
 
     fun rotateChevron(view: ImageView, expanded: Boolean) {
@@ -122,12 +184,12 @@ class Ui(private val context: Context) {
         else view.rotation = target
     }
 
-    /** Material 3 现代卡片容器，支持圆角、极细描边与自动内边距。 */
+    /** HyperOS / Apple 设置风无描边纯白大圆角卡片，舒展精致有呼吸感。 */
     fun card(
         fill: Int = R.color.surface,
-        border: Int? = R.color.card_stroke,
+        border: Int? = null,
         padH: Int = 18,
-        padV: Int = 18,
+        padV: Int = 16,
         bottomMargin: Int = 14,
         block: LinearLayout.() -> Unit = {}
     ): MaterialCardView {
@@ -146,51 +208,54 @@ class Ui(private val context: Context) {
         }
     }
 
-    fun styleCard(card: MaterialCardView, fill: Int, border: Int? = R.color.card_stroke) {
+    fun styleCard(card: MaterialCardView, fill: Int, border: Int? = null) {
         card.setCardBackgroundColor(color(fill))
         card.strokeWidth = if (border != null) dp(1) else 0
         border?.let { card.strokeColor = color(it) }
     }
 
     fun sectionTitle(parent: LinearLayout, title: String, subtitle: String? = null) {
-        parent.addView(text(title, 13f, R.color.muted, bold = true).apply {
+        parent.addView(text(title, 13f, R.color.subtle, bold = false).apply {
             isAccessibilityHeading = true
-            setPadding(dp(4), dp(6), dp(4), dp(if (subtitle == null) 8 else 2))
+            setPadding(dp(8), dp(8), dp(8), dp(if (subtitle == null) 8 else 2))
         })
         if (subtitle != null) {
-            parent.addView(text(subtitle, 13f, R.color.subtle).apply {
-                setPadding(dp(4), 0, dp(4), dp(8))
+            parent.addView(text(subtitle, 12.5f, R.color.subtle).apply {
+                setPadding(dp(8), 0, dp(8), dp(8))
             })
         }
     }
 
-    /** 子页面统一的顶部导航栏：48dp 触控区的矢量返回按钮 + 无障碍标题。 */
-    fun topBar(title: String, onBack: () -> Unit) = row().apply {
-        setPadding(0, 0, 0, dp(12))
+    /** HyperOS 风格大标题顶栏：顶部无框返回按钮 + 舒展 26sp 大标题。 */
+    fun topBar(title: String, onBack: () -> Unit) = column().apply {
+        setPadding(0, 0, 0, dp(6))
         addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_back)
             imageTintList = colorList(R.color.ink)
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             contentDescription = "返回"
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = ripple(R.color.surface, 14, R.color.card_stroke)
+            background = transparentRipple(99)
             setOnClickListener {
                 haptic(this)
                 onBack()
             }
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) }
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                marginStart = -dp(12)
+            }
         })
-        addView(text(title, 22f, bold = true).apply {
+        addView(text(title, 26f, bold = true).apply {
             isAccessibilityHeading = true
-        }, LinearLayout.LayoutParams(0, -2, 1f))
+            setPadding(dp(2), dp(2), 0, dp(4))
+        })
     }
 
-    /** 紧凑语义状态胶囊，内置状态缓存避免轮询刷新时的重复绘制。 */
+    /** 克制标签：默认中性灰底，仅在极少数必要场景使用。 */
     fun badge(label: String = "", tone: Tone = Tone.NEUTRAL) = TextView(context).apply {
-        textSize = 12f
+        textSize = 11.5f
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         gravity = Gravity.CENTER
-        setPadding(dp(10), dp(4), dp(10), dp(4))
+        setPadding(dp(8), dp(3), dp(8), dp(3))
         layoutParams = LinearLayout.LayoutParams(-2, -2)
         styleBadge(this, label, tone)
     }
@@ -201,16 +266,21 @@ class Ui(private val context: Context) {
         view.tag = stateKey
         view.text = label
         view.setTextColor(color(tone.ink))
-        view.background = round(tone.surface, 99)
+        view.background = round(tone.surface, 8)
     }
 
-    /** Material 3 现代药丸开关。 */
-    fun switch(checked: Boolean, description: String, stableId: Int? = null) = MaterialSwitch(context).apply {
+    /** 精致 MIUI 风格圆润开关（纯色轨道 + 纯白圆形滑块，无笨重外框）。 */
+    fun switch(checked: Boolean, description: String, stableId: Int? = null) = SwitchCompat(context).apply {
         stableId?.let { id = it }
         contentDescription = description
         isSaveEnabled = false
+        showText = false
+        setTrackResource(R.drawable.switch_track)
+        setThumbResource(R.drawable.switch_thumb)
+        trackTintList = null
+        thumbTintList = null
+        minHeight = dp(44)
         isChecked = checked
-        minHeight = dp(48)
     }
 
     fun checkBox(stableId: Int, label: String, checked: Boolean) = MaterialCheckBox(context).apply {
@@ -218,7 +288,7 @@ class Ui(private val context: Context) {
         text = label
         textSize = 15f
         setTextColor(color(R.color.ink))
-        minHeight = dp(48)
+        minHeight = dp(46)
         isChecked = checked
         isSaveEnabled = false
     }
@@ -236,9 +306,9 @@ class Ui(private val context: Context) {
             }
         }
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(8), dp(12), dp(14), dp(12))
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
-        minHeight = dp(56)
+        setPadding(dp(8), dp(10), dp(12), dp(10))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) }
+        minHeight = dp(52)
         isSaveEnabled = false
     }
 
@@ -247,12 +317,12 @@ class Ui(private val context: Context) {
         text = label
         textSize = 15f
         setTextColor(color(R.color.ink))
-        minHeight = dp(48)
+        minHeight = dp(44)
         isSaveEnabled = false
         layoutParams = LinearLayout.LayoutParams(-1, -2)
     }
 
-    /** Material 3 OutlinedBox 输入框：支持浮动标签、辅助说明、内联错误与密码明密文眼睛图标。 */
+    /** Material 3 OutlinedBox 输入框：紧致圆角 + 浮动标签 + 内置明密文切换图标。 */
     fun textField(
         stableId: Int? = null,
         label: String,
@@ -282,7 +352,7 @@ class Ui(private val context: Context) {
         }
         val edit = TextInputEditText(layout.context).apply {
             stableId?.let { id = it }
-            textSize = 15f
+            textSize = 14.5f
             setTextColor(color(R.color.ink))
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
             inputType = when {
@@ -303,14 +373,27 @@ class Ui(private val context: Context) {
         parent.addView(View(context), LinearLayout.LayoutParams(1, dp(height)))
     }
 
-    fun divider(parent: LinearLayout, top: Int = 14, bottom: Int = 14) {
+    /** 发丝级极细分割线（1px 物理像素）。 */
+    fun divider(parent: LinearLayout, top: Int = 10, bottom: Int = 10) {
         parent.addView(
             View(context).apply { setBackgroundColor(color(R.color.line)) },
-            LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(top); bottomMargin = dp(bottom) }
+            LinearLayout.LayoutParams(-1, 1).apply { topMargin = dp(top); bottomMargin = dp(bottom) }
         )
     }
 
-    /** Material 3 标准按钮（Filled / Tonal / Danger / Compact）。 */
+    /** 避开左侧图标底块的发丝级内缩分割线（HyperOS / iOS 设置列表灵魂细节）。 */
+    fun insetDivider(parent: LinearLayout, startDp: Int = 44, top: Int = 0, bottom: Int = 0) {
+        parent.addView(
+            View(context).apply { setBackgroundColor(color(R.color.line)) },
+            LinearLayout.LayoutParams(-1, 1).apply {
+                marginStart = dp(startDp)
+                topMargin = dp(top)
+                bottomMargin = dp(bottom)
+            }
+        )
+    }
+
+    /** MIUI 风格按钮：主按钮用纯净系统蓝，次按钮用中性浅灰底+黑字（告别满屏淡蓝）。 */
     fun button(
         value: String,
         primary: Boolean = false,
@@ -319,28 +402,28 @@ class Ui(private val context: Context) {
         action: () -> Unit
     ) = MaterialButton(context).apply {
         text = value
-        textSize = if (compact) 13f else 15f
+        textSize = if (compact) 13f else 14.5f
         isAllCaps = false
         insetTop = 0
         insetBottom = 0
-        cornerRadius = dp(if (compact) 12 else 14)
+        cornerRadius = dp(if (compact) 10 else 13)
         elevation = 0f
         stateListAnimator = null
-        val heightDp = if (compact) 44 else 48
+        val heightDp = if (compact) 40 else 46
         minHeight = dp(heightDp)
         minimumHeight = dp(heightDp)
         minWidth = 0
         minimumWidth = 0
-        setPadding(dp(if (compact) 16 else 18), dp(8), dp(if (compact) 16 else 18), dp(8))
+        setPadding(dp(if (compact) 14 else 16), dp(6), dp(if (compact) 14 else 16), dp(6))
         val foreground = when {
             primary -> R.color.on_accent
             danger -> R.color.danger
-            else -> R.color.accent
+            else -> R.color.ink
         }
         val fill = when {
             primary -> R.color.accent
             danger -> R.color.danger_surface
-            else -> R.color.accent_surface
+            else -> R.color.neutral_surface
         }
         backgroundTintList = colorList(fill)
         setTextColor(color(foreground))
@@ -353,16 +436,16 @@ class Ui(private val context: Context) {
         layoutParams = LinearLayout.LayoutParams(if (compact) -2 else -1, -2)
     }
 
-    /** 轻量文字按钮：保持 44dp 触控高度，不抢占主操作视觉权重。 */
-    fun ghostButton(value: String, tint: Int = R.color.accent, action: () -> Unit) = TextView(context).apply {
+    /** 轻量文字按钮。 */
+    fun ghostButton(value: String, tint: Int = R.color.muted, action: () -> Unit) = TextView(context).apply {
         text = value
-        textSize = 14f
+        textSize = 13.5f
         setTextColor(color(tint))
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         gravity = Gravity.CENTER_VERTICAL
-        minHeight = dp(44)
-        setPadding(dp(8), dp(8), dp(8), dp(8))
-        background = ripple(R.color.surface, 10)
+        minHeight = dp(40)
+        setPadding(dp(8), dp(6), dp(8), dp(6))
+        background = transparentRipple(8)
         setOnClickListener {
             haptic(this)
             action()
@@ -372,23 +455,22 @@ class Ui(private val context: Context) {
 
     fun dialog() = MaterialAlertDialogBuilder(context)
 
-    /** Material 3 底部抽屉，适合试算、单选等高频轻交互。 */
     fun bottomSheet(title: String, subtitle: String? = null, buildContent: (LinearLayout, BottomSheetDialog, ScrollView) -> Unit): BottomSheetDialog {
         val dialog = BottomSheetDialog(context)
         val root = column().apply {
-            background = round(R.color.surface, 24)
+            background = round(R.color.surface, 22)
             addView(BottomSheetDragHandleView(context), LinearLayout.LayoutParams(-1, -2))
-            addView(text(title, 20f, bold = true).apply {
+            addView(text(title, 19f, bold = true).apply {
                 isAccessibilityHeading = true
-                setPadding(dp(20), 0, dp(20), dp(if (subtitle == null) 12 else 4))
+                setPadding(dp(18), 0, dp(18), dp(if (subtitle == null) 10 else 4))
             })
             if (subtitle != null) {
                 addView(text(subtitle, 13f, R.color.muted).apply {
-                    setPadding(dp(20), 0, dp(20), dp(12))
+                    setPadding(dp(18), 0, dp(18), dp(10))
                 })
             }
         }
-        val body = column().apply { setPadding(dp(20), dp(4), dp(20), dp(24)) }
+        val body = column().apply { setPadding(dp(18), dp(4), dp(18), dp(22)) }
         val scroll = ScrollView(context).apply {
             isFillViewport = true
             addView(body)

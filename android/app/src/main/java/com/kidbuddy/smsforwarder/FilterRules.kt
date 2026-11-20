@@ -10,6 +10,7 @@ data class FilterRules(
     val matchAll: Boolean = false,
     val excludeKeywords: List<String> = emptyList(),
     val allowedSenders: List<String> = emptyList(),
+    val requireCodeWord: Boolean = false,
 ) {
     fun validationError(): String? {
         if (includeKeywords.size > MAX_ITEMS || excludeKeywords.size > MAX_ITEMS || allowedSenders.size > MAX_ITEMS) {
@@ -46,6 +47,7 @@ data class FilterRules(
         }
         val conditions = mutableListOf<Boolean>()
         if (includeKeywords.isNotEmpty()) conditions += includeKeywords.any { body.contains(it, ignoreCase = true) }
+        if (requireCodeWord) conditions += CODE_WORDS.any { body.contains(it, ignoreCase = true) }
         if (requireDigits) conditions += DIGITS.containsMatchIn(normalizeDigits(body))
         val accepted = conditions.isEmpty() || if (matchAll) conditions.all { it } else conditions.any { it }
         return if (accepted) FilterResult(true, "符合转发条件") else FilterResult(false, "正文不符合条件，未转发")
@@ -55,9 +57,10 @@ data class FilterRules(
         const val MAX_ITEMS = 32
         const val MAX_KEYWORD_LENGTH = 64
         const val MAX_SENDER_LENGTH = 64
+        val CODE_WORDS: List<String> = listOf("验证码", "动态码", "校验码", "安全码", "确认码", "登录码", "code")
         // 不能从 7 位以上数字串截取；邻接其他 Unicode 十进制数字也不作为完整数字串。
-        private val DIGITS = Regex("(?<!\\p{Nd})[0-9]{4,6}(?!\\p{Nd})")
-        private fun normalizeDigits(value: String): String = value.map { if (it in '０'..'９') '0' + (it - '０') else it }.joinToString("")
+        internal val DIGITS = Regex("(?<!\\p{Nd})[0-9]{4,6}(?!\\p{Nd})")
+        internal fun normalizeDigits(value: String): String = value.map { if (it in '０'..'９') '0' + (it - '０') else it }.joinToString("")
         private fun compact(value: String): String = normalizeDigits(value).filterNot {
             it.isWhitespace() || it in "-－–—()（）"
         }.replace('＋', '+')

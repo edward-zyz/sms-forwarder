@@ -15,41 +15,39 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
-import com.google.android.material.materialswitch.MaterialSwitch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
     private lateinit var ui: Ui
-    private lateinit var heroCard: MaterialCardView
-    private lateinit var statusBadge: TextView
-    private lateinit var toggle: MaterialSwitch
+    private lateinit var statusTile: LinearLayout
+    private lateinit var toggle: SwitchCompat
     private lateinit var stateTitle: TextView
     private lateinit var stateDetail: TextView
     private lateinit var setupChecklist: LinearLayout
-    private lateinit var stepPermBadge: TextView
-    private lateinit var stepDestBadge: TextView
-    private lateinit var stepRuleBadge: TextView
+    private lateinit var stepPermValue: TextView
+    private lateinit var stepDestValue: TextView
+    private lateinit var stepRuleValue: TextView
     private lateinit var testRow: LinearLayout
     private lateinit var testButton: MaterialButton
     private lateinit var latest: TextView
     private lateinit var latestTime: TextView
     private lateinit var queueCard: MaterialCardView
-    private lateinit var queueBadge: TextView
+    private lateinit var queueCountText: TextView
     private lateinit var queueHint: TextView
     private lateinit var retryButton: MaterialButton
     private lateinit var clearButton: MaterialButton
     private lateinit var destSummary: TextView
-    private lateinit var destBadge: TextView
+    private lateinit var destValue: TextView
     private lateinit var ruleSummary: TextView
-    private lateinit var ruleBadge: TextView
+    private lateinit var ruleValue: TextView
     private lateinit var permissionSummary: TextView
-    private lateinit var permissionBadge: TextView
+    private lateinit var permissionValue: TextView
     private var updatingToggle = false
-    private var heroStateCache = ""
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() { renderStatus(); handler.postDelayed(this, 1500) }
@@ -59,7 +57,7 @@ class MainActivity : AppCompatActivity() {
         AppAppearance.apply(this)
         super.onCreate(savedInstanceState)
         ui = Ui(this)
-        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(20), ui.dp(18), ui.dp(28)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(14), ui.dp(18), ui.dp(28)) }
         ui.enableMotion(content)
         val scroll = ScrollView(this).apply {
             id = R.id.main_scroll
@@ -70,31 +68,32 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(scroll)
 
-        // 顶部页头：品牌标识 + 带矢量图标的外观切换胶囊
+        // HyperOS 风格大标题页头：顶部轻量工具行 + 舒展大标题
         val modes = arrayOf("system", "light", "dark")
         val modeLabels = arrayOf("跟随系统", "浅色模式", "深色模式")
-        val modeShort = arrayOf("自动", "浅色", "深色")
+        val modeShort = arrayOf("自动外观", "浅色", "深色")
         val appearance = getSharedPreferences("appearance", MODE_PRIVATE)
         val selectedMode = modes.indexOf(appearance.getString("mode", "system")).coerceAtLeast(0)
 
         content.addView(ui.row().apply {
+            setPadding(ui.dp(2), 0, 0, ui.dp(16))
             addView(ImageView(this@MainActivity).apply {
                 setImageResource(R.drawable.ic_forward)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(ui.dp(42), ui.dp(42)).apply { marginEnd = ui.dp(12) })
+            }, LinearLayout.LayoutParams(ui.dp(38), ui.dp(38)).apply { marginEnd = ui.dp(12) })
             addView(ui.column().apply {
-                addView(ui.text("短信转发", 22f, bold = true).apply { isAccessibilityHeading = true })
-                addView(ui.text("新短信自动送达飞书、企微、钉钉等", 13f, R.color.muted))
+                addView(ui.text("短信转发", 24f, bold = true).apply { isAccessibilityHeading = true })
+                addView(ui.text("自动送达飞书、企微、钉钉等", 13f, R.color.subtle))
             }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(ui.row().apply {
-                minimumHeight = ui.dp(44)
+                minimumHeight = ui.dp(40)
                 contentDescription = "外观：${modeLabels[selectedMode]}"
-                setPadding(ui.dp(12), ui.dp(8), ui.dp(12), ui.dp(8))
-                background = ui.ripple(R.color.surface, 99, R.color.card_stroke)
+                setPadding(ui.dp(10), ui.dp(6), ui.dp(10), ui.dp(6))
+                background = ui.transparentRipple(99)
                 addView(ui.icon(R.drawable.ic_theme, 16, R.color.muted).apply {
-                    layoutParams = LinearLayout.LayoutParams(ui.dp(16), ui.dp(16)).apply { marginEnd = ui.dp(6) }
+                    layoutParams = LinearLayout.LayoutParams(ui.dp(16), ui.dp(16)).apply { marginEnd = ui.dp(5) }
                 })
-                addView(ui.text(modeShort[selectedMode], 13f, R.color.muted, bold = true))
+                addView(ui.text(modeShort[selectedMode], 13f, R.color.muted))
                 setOnClickListener {
                     ui.haptic(this)
                     ui.dialog().setTitle("选择外观")
@@ -107,78 +106,76 @@ class MainActivity : AppCompatActivity() {
                 }
             })
         })
-        ui.gap(content, 18)
 
-        // 第一层：核心状态主卡（Material 3 卡片 + 药丸开关 + 准备清单 / 测试入口）
-        heroCard = ui.card(R.color.surface, border = R.color.card_stroke, padH = 18, padV = 18) {
+        // 第一层：核心状态主卡（纯白大圆角 + 40dp 精致状态图标块 + MIUI 圆润开关）
+        content.addView(ui.card(padH = 18, padV = 18) {
             ui.enableMotion(this)
             addView(ui.row().apply {
-                statusBadge = ui.badge()
-                addView(statusBadge)
-                addView(View(this@MainActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                statusTile = ui.iconTile(R.drawable.ic_bolt, R.color.tile_gray, sizeDp = 40, iconSizeDp = 20, radiusDp = 12)
+                addView(statusTile)
+                addView(ui.column().apply {
+                    stateTitle = ui.text("", 17f, bold = true)
+                    addView(stateTitle)
+                    ui.gap(this, 2)
+                    stateDetail = ui.text("", 13f, R.color.muted)
+                    addView(stateDetail)
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(10) })
                 toggle = ui.switch(State.enabled(this@MainActivity), "开启或暂停自动转发短信")
                 addView(toggle)
             })
-            ui.gap(this, 8)
-            stateTitle = ui.text("", 22f, bold = true)
-            addView(stateTitle)
-            ui.gap(this, 4)
-            stateDetail = ui.text("", 14f, R.color.muted)
-            addView(stateDetail)
 
+            // 未就绪时的 3 步准备清单（纯净列表，无花哨彩色胶囊）
             setupChecklist = ui.column().apply {
-                ui.divider(this, top = 14, bottom = 12)
-                addView(ui.text("开启前请完成以下准备", 13f, R.color.muted, bold = true))
-                ui.gap(this, 8)
-                stepPermBadge = ui.badge()
-                addView(stepRow("1. 授予接收短信权限", stepPermBadge) { openPermissions() })
-                ui.gap(this, 8)
-                stepDestBadge = ui.badge()
-                addView(stepRow("2. 添加转发目的地", stepDestBadge) {
+                ui.divider(this, top = 12, bottom = 4)
+                stepPermValue = ui.valueText()
+                addView(stepRow("1. 授予接收短信权限", stepPermValue) { openPermissions() })
+                ui.divider(this, top = 0, bottom = 0)
+                stepDestValue = ui.valueText()
+                addView(stepRow("2. 添加转发目的地", stepDestValue) {
                     val hasDest = runCatching { ConfigStore.load(this@MainActivity).destinations.isNotEmpty() }.getOrDefault(false)
                     startActivity(Intent(this@MainActivity, if (hasDest) DestinationsActivity::class.java else DestinationEditActivity::class.java))
                 })
-                ui.gap(this, 8)
-                stepRuleBadge = ui.badge()
-                addView(stepRow("3. 设置并启用转发规则", stepRuleBadge) {
+                ui.divider(this, top = 0, bottom = 0)
+                stepRuleValue = ui.valueText()
+                addView(stepRow("3. 设置并启用转发规则", stepRuleValue) {
                     startActivity(Intent(this@MainActivity, RulesActivity::class.java))
                 })
             }
             addView(setupChecklist)
 
+            // 运行中快捷测试入口（中性灰底黑字，干净克制）
             testRow = ui.column().apply {
-                ui.gap(this, 14)
-                testButton = ui.button("发送测试消息", primary = true) { sendTest() }
+                ui.gap(this, 12)
+                testButton = ui.button("发送测试消息") { sendTest() }
                 addView(testButton)
             }
             addView(testRow)
-        }
-        content.addView(heroCard)
+        })
 
-        // 第二层：最近动态
-        content.addView(ui.card(padH = 18, padV = 15) {
+        // 第二层：最近动态（紧致纯白卡）
+        content.addView(ui.card(padH = 16, padV = 14) {
             addView(ui.row().apply {
-                addView(ui.text("最近动态", 14f, R.color.muted, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                addView(ui.text("最近动态", 13f, R.color.subtle), LinearLayout.LayoutParams(0, -2, 1f))
                 latestTime = ui.text("", 12f, R.color.subtle)
                 addView(latestTime)
             })
-            ui.gap(this, 8)
-            latest = ui.text("", 15f)
+            ui.gap(this, 6)
+            latest = ui.text("", 14.5f)
             latest.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             addView(latest)
         })
 
         // 第三层：待发队列（仅在有积压时浮现）
-        queueCard = ui.card(R.color.surface, border = R.color.card_stroke, padH = 18, padV = 16) {
+        queueCard = ui.card(padH = 16, padV = 14) {
             addView(ui.row().apply {
-                addView(ui.text("待发队列", 16f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
-                queueBadge = ui.badge("", Ui.Tone.WARNING)
-                addView(queueBadge)
+                addView(ui.text("待发队列", 15.5f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                queueCountText = ui.valueText("", R.color.warning)
+                addView(queueCountText)
             })
-            ui.gap(this, 8)
-            queueHint = ui.text("", 14f, R.color.muted)
+            ui.gap(this, 6)
+            queueHint = ui.text("", 13f, R.color.muted)
             addView(queueHint)
-            ui.gap(this, 14)
+            ui.gap(this, 12)
             addView(ui.row().apply {
                 retryButton = ui.button("重试发送") { retryQueue() }.apply {
                     layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) }
@@ -192,39 +189,38 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(queueCard)
 
-        // 第四层：转发设置分组卡
+        // 第四层：转发设置（HyperOS / Apple 设置风：左侧 32dp 柔和圆角图标底块 + 发丝内缩分割线）
         ui.sectionTitle(content, "转发设置")
-        content.addView(ui.card(padH = 18, padV = 6) {
-            destSummary = ui.text("", 13f, R.color.muted)
-            destBadge = ui.badge()
-            addView(settingEntry("转发目的地", destSummary, trailingBadge(destBadge)) {
+        content.addView(ui.card(padH = 18, padV = 4) {
+            destSummary = ui.text("", 12.5f, R.color.subtle)
+            destValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_send, R.color.tile_blue, "转发目的地", destSummary, trailingValue(destValue)) {
                 startActivity(Intent(this@MainActivity, DestinationsActivity::class.java))
             })
 
-            ui.divider(this, top = 2, bottom = 2)
+            ui.insetDivider(this, startDp = 44)
 
-            ruleSummary = ui.text("", 13f, R.color.muted)
-            ruleBadge = ui.badge()
-            addView(settingEntry("转发规则", ruleSummary, trailingBadge(ruleBadge)) {
+            ruleSummary = ui.text("", 12.5f, R.color.subtle)
+            ruleValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_filter, R.color.tile_indigo, "转发规则", ruleSummary, trailingValue(ruleValue)) {
                 startActivity(Intent(this@MainActivity, RulesActivity::class.java))
             })
 
-            ui.divider(this, top = 2, bottom = 2)
+            ui.insetDivider(this, startDp = 44)
 
-            permissionSummary = ui.text("", 13f, R.color.muted)
-            permissionBadge = ui.badge()
-            addView(settingEntry("权限与后台保活", permissionSummary, trailingBadge(permissionBadge)) {
+            permissionSummary = ui.text("", 12.5f, R.color.subtle)
+            permissionValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_shield, R.color.tile_green, "权限与后台保活", permissionSummary, trailingValue(permissionValue)) {
                 openPermissions()
             })
         })
 
-        // 页脚隐私与行为说明
-        ui.gap(content, 4)
+        // 页脚隐私说明
         content.addView(ui.text(
-            "本机暂存 · 发送成功后立即删除 · 不读取历史短信\n暂停期间的新短信不会补发 · 请仅转发至可信私人群",
+            "本机暂存 · 发送后即删 · 不读历史短信 · 暂停期间不补发",
             12f, R.color.subtle
         ).apply {
-            setPadding(ui.dp(4), 0, ui.dp(4), 0)
+            setPadding(ui.dp(6), ui.dp(4), ui.dp(6), 0)
         })
 
         toggle.setOnCheckedChangeListener { _, checked ->
@@ -236,26 +232,35 @@ class MainActivity : AppCompatActivity() {
         renderStatus()
     }
 
-    private fun trailingBadge(badge: TextView) = ui.row().apply {
-        addView(badge)
+    private fun trailingValue(valueView: TextView) = ui.row().apply {
+        addView(valueView)
         addView(ui.chevronRight())
     }
 
-    private fun stepRow(label: String, statusView: TextView, action: () -> Unit) = ui.row().apply {
-        minimumHeight = ui.dp(48)
-        setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
-        background = ui.ripple(R.color.surface, 12, R.color.card_stroke)
-        addView(ui.text(label, 14f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
-        addView(statusView, LinearLayout.LayoutParams(-2, -2).apply { marginStart = ui.dp(8) })
+    private fun stepRow(label: String, valueView: TextView, action: () -> Unit) = ui.row().apply {
+        minimumHeight = ui.dp(46)
+        setPadding(0, ui.dp(8), 0, ui.dp(8))
+        background = ui.transparentRipple(8)
+        addView(ui.text(label, 14f), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(valueView, LinearLayout.LayoutParams(-2, -2).apply { marginStart = ui.dp(8) })
+        addView(ui.chevronRight())
         setOnClickListener { ui.haptic(this); action() }
     }
 
-    private fun settingEntry(title: String, subtitleView: TextView, trailing: View, action: () -> Unit) = ui.row().apply {
-        minimumHeight = ui.dp(64)
+    private fun settingEntry(
+        iconRes: Int,
+        tileColorRes: Int,
+        title: String,
+        subtitleView: TextView,
+        trailing: View,
+        action: () -> Unit
+    ) = ui.row().apply {
+        minimumHeight = ui.dp(62)
         setPadding(0, ui.dp(12), 0, ui.dp(12))
-        background = ui.ripple(R.color.surface, 10)
+        background = ui.transparentRipple(10)
+        addView(ui.iconTile(iconRes, tileColorRes, sizeDp = 32, iconSizeDp = 17, radiusDp = 9))
         addView(ui.column().apply {
-            addView(ui.text(title, 16f, bold = true))
+            addView(ui.text(title, 15.5f, bold = true))
             ui.gap(this, 2)
             addView(subtitleView)
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(10) })
@@ -398,28 +403,15 @@ class MainActivity : AppCompatActivity() {
         syncToggle()
 
         val isRunning = enabled && ready
-        val nextHeroState = when {
-            isRunning -> "running"
-            !ready -> "pending"
-            else -> "paused"
-        }
-        if (heroStateCache != nextHeroState) {
-            heroStateCache = nextHeroState
-            when (nextHeroState) {
-                "running" -> {
-                    ui.styleCard(heroCard, R.color.success_surface, R.color.line)
-                    ui.styleBadge(statusBadge, "● 运行中", Ui.Tone.SUCCESS)
-                }
-                "pending" -> {
-                    ui.styleCard(heroCard, R.color.warning_surface, R.color.line)
-                    ui.styleBadge(statusBadge, "● 待准备", Ui.Tone.WARNING)
-                }
-                else -> {
-                    ui.styleCard(heroCard, R.color.surface, R.color.card_stroke)
-                    ui.styleBadge(statusBadge, "● 已暂停", Ui.Tone.NEUTRAL)
-                }
-            }
-        }
+        ui.styleIconTile(
+            statusTile,
+            when {
+                isRunning -> R.color.tile_green
+                !ready -> R.color.tile_amber
+                else -> R.color.tile_gray
+            },
+            radiusDp = 12
+        )
 
         stateTitle.showText(when {
             configResult.isFailure -> "转发配置异常"
@@ -432,14 +424,14 @@ class MainActivity : AppCompatActivity() {
             !permission -> "授权接收短信并配置规则后，即可自动转发新短信。"
             !hasDest -> "请先添加至少一个转发目的地（飞书、企微、钉钉或 Webhook）。"
             !hasActiveRoute -> "请添加并启用至少一条转发规则，指定哪些短信发往哪里。"
-            enabled -> "正按 ${config!!.enabledRules().size} 条已启用规则，自动转发符合条件的新短信。"
-            else -> "打开右上角开关即可开始转发；暂停期间的新短信不补发。"
+            enabled -> "正按 ${config!!.enabledRules().size} 条已启用规则自动转发新短信。"
+            else -> "打开右侧开关即可开始转发；暂停期间的新短信不补发。"
         })
 
         setupChecklist.visibility = if (ready || configResult.isFailure) View.GONE else View.VISIBLE
-        ui.styleBadge(stepPermBadge, if (permission) "✓ 已授权" else "去授权", if (permission) Ui.Tone.SUCCESS else Ui.Tone.DANGER)
-        ui.styleBadge(stepDestBadge, if (hasDest) "✓ 已添加 ${config!!.destinations.size} 个" else "去添加", if (hasDest) Ui.Tone.SUCCESS else Ui.Tone.ACCENT)
-        ui.styleBadge(stepRuleBadge, if (hasActiveRoute) "✓ 已启用" else "去设置", if (hasActiveRoute) Ui.Tone.SUCCESS else Ui.Tone.ACCENT)
+        ui.setValueText(stepPermValue, if (permission) "已授权" else "去授权", if (permission) R.color.subtle else R.color.danger)
+        ui.setValueText(stepDestValue, if (hasDest) "已添加" else "去添加", if (hasDest) R.color.subtle else R.color.accent)
+        ui.setValueText(stepRuleValue, if (hasActiveRoute) "已启用" else "去设置", if (hasActiveRoute) R.color.subtle else R.color.accent)
 
         testRow.visibility = if (enabled && hasDest) View.VISIBLE else View.GONE
         ui.enabled(testButton, enabled && hasDest)
@@ -452,41 +444,41 @@ class MainActivity : AppCompatActivity() {
 
         queueCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         if (count > 0) {
-            ui.styleBadge(queueBadge, "$count 条待发", Ui.Tone.WARNING)
+            ui.setValueText(queueCountText, "$count 条待发", R.color.warning, bold = true)
             queueHint.showText(if (enabled) {
-                "网络恢复后会自动重试；若连续失败 8 次，可在此手动重试。"
+                "网络恢复后会自动重试；连续失败 8 次后可手动重试。"
             } else {
-                "转发已暂停。开启转发后将继续发送，也可以直接清空。"
+                "转发已暂停。开启转发将继续发送，也可以直接清空。"
             })
             ui.enabled(retryButton, enabled)
             ui.enabled(clearButton, !enabled)
         }
 
         if (config == null) {
-            destSummary.showText("配置异常，点击查看")
-            ui.styleBadge(destBadge, "异常", Ui.Tone.DANGER)
+            destSummary.showText("配置异常，点击检查")
+            ui.setValueText(destValue, "异常", R.color.danger)
         } else if (config.destinations.isEmpty()) {
-            destSummary.showText("支持飞书、企业微信、钉钉、自定义 Webhook")
-            ui.styleBadge(destBadge, "未添加", Ui.Tone.WARNING)
+            destSummary.showText("支持飞书、企业微信、钉钉、Webhook")
+            ui.setValueText(destValue, "未添加", R.color.warning)
         } else {
             val platforms = config.destinations.map { it.type.displayName }.distinct().joinToString("、")
-            destSummary.showText("已配置 $platforms")
-            ui.styleBadge(destBadge, "${config.destinations.size} 个", Ui.Tone.ACCENT)
+            destSummary.showText(platforms)
+            ui.setValueText(destValue, "${config.destinations.size} 个", R.color.subtle)
         }
 
         if (config == null) {
-            ruleSummary.showText("配置异常，点击查看")
-            ui.styleBadge(ruleBadge, "异常", Ui.Tone.DANGER)
+            ruleSummary.showText("配置异常，点击检查")
+            ui.setValueText(ruleValue, "异常", R.color.danger)
         } else if (config.rules.isEmpty()) {
-            ruleSummary.showText("为验证码、告警等设置不同条件和目的地")
-            ui.styleBadge(ruleBadge, "未设置", Ui.Tone.WARNING)
+            ruleSummary.showText("按验证码、号码、关键词灵活路由")
+            ui.setValueText(ruleValue, "未设置", R.color.warning)
         } else {
             val activeCount = config.enabledRules().size
-            ruleSummary.showText("共 ${config.rules.size} 条规则，其中 $activeCount 条已启用")
-            ui.styleBadge(
-                ruleBadge,
+            ruleSummary.showText("共 ${config.rules.size} 条规则")
+            ui.setValueText(
+                ruleValue,
                 if (activeCount > 0) "$activeCount 条生效" else "均已停用",
-                if (activeCount > 0) Ui.Tone.SUCCESS else Ui.Tone.NEUTRAL
+                if (activeCount > 0) R.color.subtle else R.color.muted
             )
         }
 
@@ -494,20 +486,20 @@ class MainActivity : AppCompatActivity() {
         val batteryExempt = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
         when {
             !permission -> {
-                permissionSummary.showText("缺少接收短信权限，无法自动转发")
-                ui.styleBadge(permissionBadge, "需授权", Ui.Tone.DANGER)
+                permissionSummary.showText("缺少接收短信权限")
+                ui.setValueText(permissionValue, "需授权", R.color.danger)
             }
             bgRestricted -> {
-                permissionSummary.showText("短信权限已授权 · 系统限制了后台活动")
-                ui.styleBadge(permissionBadge, "建议调整", Ui.Tone.WARNING)
+                permissionSummary.showText("系统限制了后台活动")
+                ui.setValueText(permissionValue, "建议调整", R.color.warning)
             }
             !batteryExempt -> {
-                permissionSummary.showText("短信权限已授权 · 电池优化可能延迟送达")
-                ui.styleBadge(permissionBadge, "可优化", Ui.Tone.WARNING)
+                permissionSummary.showText("电池优化可能延迟送达")
+                ui.setValueText(permissionValue, "可优化", R.color.warning)
             }
             else -> {
-                permissionSummary.showText("短信权限与后台运行状态正常")
-                ui.styleBadge(permissionBadge, "正常", Ui.Tone.SUCCESS)
+                permissionSummary.showText("短信权限与后台运行正常")
+                ui.setValueText(permissionValue, "正常", R.color.subtle)
             }
         }
     }

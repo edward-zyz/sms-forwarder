@@ -28,13 +28,13 @@ class SmsReceiver : BroadcastReceiver() {
                     return
                 }
                 val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA).format(Date(first.timestampMillis))
-                val text = "短信转发\n发件人：${first.originatingAddress ?: "未知"}\n时间：$time\n\n$body"
                 val pdus = (intent.extras?.get("pdus") as? Array<*>)?.mapNotNull { it as? ByteArray } ?: return
                 val smsHash = Protocol.fingerprint(intent.getIntExtra("subscription", -1), pdus)
                 var queued = 0
                 Store(context).use { store ->
                     for (dispatch in decision.dispatches) {
                         val destHash = "$smsHash:${dispatch.destination.id}"
+                        val text = MessageFormatter.format(dispatch.rule.name, first.originatingAddress, time, body)
                         if (store.add(text, destHash, dispatch.destination.id, dispatch.rule.name)) {
                             queued++
                         }

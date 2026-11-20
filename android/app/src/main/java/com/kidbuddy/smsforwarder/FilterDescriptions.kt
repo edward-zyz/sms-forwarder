@@ -7,6 +7,7 @@ object FilterDescriptions {
             if (rules.excludeKeywords.isNotEmpty() || rules.allowedSenders.isNotEmpty()) "原有排除词和来源号码限制不生效，含排除内容或来自其他号码也会转发。" else ""
         val bodyConditions = buildList {
             if (rules.includeKeywords.isNotEmpty()) add("含${words(rules.includeKeywords)}")
+            if (rules.requireCodeWord) add("含验证码字样（验证码/动态码/校验码等）")
             if (rules.requireDigits) add("有完整连续的 4–6 位数字")
         }
         val body = when (bodyConditions.size) {

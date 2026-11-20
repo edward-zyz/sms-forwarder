@@ -6,6 +6,7 @@
     <item name="filter_scroll" type="id" />
     <item name="filter_enabled" type="id" />
     <item name="filter_include" type="id" />
+    <item name="filter_code_word" type="id" />
     <item name="filter_digits" type="id" />
     <item name="filter_any" type="id" />
     <item name="filter_all" type="id" />

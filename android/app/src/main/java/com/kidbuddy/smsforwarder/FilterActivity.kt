@@ -15,10 +15,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.checkbox.MaterialCheckBox
-import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -33,15 +33,18 @@ class FilterActivity : AppCompatActivity() {
     private lateinit var editor: FilterEditor
     private lateinit var ruleNameLayout: TextInputLayout
     private lateinit var ruleNameInput: TextInputEditText
-    private lateinit var ruleEnabledSwitch: MaterialSwitch
+    private lateinit var ruleEnabledSwitch: SwitchCompat
     private lateinit var destinationLabel: TextView
     private lateinit var include: TextInputEditText
+    private lateinit var codeWord: MaterialCheckBox
     private lateinit var digits: MaterialCheckBox
     private lateinit var exclude: TextInputEditText
     private lateinit var senders: TextInputEditText
     private lateinit var all: MaterialRadioButton
     private lateinit var any: MaterialRadioButton
+    private lateinit var presetGroup: RadioGroup
     private lateinit var presetButtons: List<Pair<FilterEditor.Intent, MaterialRadioButton>>
+    private val templateCheckBoxes = mutableMapOf<String, MaterialCheckBox>()
     private lateinit var custom: MaterialCardView
     private lateinit var combination: LinearLayout
     private lateinit var optional: LinearLayout
@@ -70,6 +73,7 @@ class FilterActivity : AppCompatActivity() {
     private var invalidSaved = false
     private var excludeOpen = false
     private var senderOpen = false
+    private var selectedTemplates: Set<String> = emptySet()
     private var testOpen = false
     private var testSender = ""
     private var testBody = ""
@@ -106,13 +110,15 @@ class FilterActivity : AppCompatActivity() {
         invalidSaved = savedInstanceState?.getBoolean("invalidSaved") ?: configResult.isFailure
         excludeOpen = savedInstanceState?.getBoolean("excludeOpen") ?: false
         senderOpen = savedInstanceState?.getBoolean("senderOpen") ?: false
+        selectedTemplates = savedInstanceState?.getStringArrayList("selectedTemplates")?.toSet()
+            ?: PlatformTemplates.detectSelectedIds(draftFilter)
         testSender = savedInstanceState?.getString("testSender").orEmpty()
         testBody = savedInstanceState?.getString("testBody").orEmpty()
         testResult = savedInstanceState?.getString("testResult").orEmpty()
         testRules = savedInstanceState?.getBundle("testRules")?.let(::readRules)
 
         val root = ui.column().apply { setBackgroundColor(ui.color(R.color.page)) }
-        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(16)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(10), ui.dp(18), ui.dp(20)) }
         ui.enableMotion(content)
         val scroll = ScrollView(this).apply {
             id = R.id.filter_scroll
@@ -211,22 +217,26 @@ class FilterActivity : AppCompatActivity() {
             })
         })
 
-        // 第二层：实时规则效果预览卡
-        content.addView(ui.card(R.color.accent_surface, border = R.color.line, padH = 16, padV = 14) {
+        // 第二层：实时规则效果预览卡（纯白大圆角 + 克制状态文字，无蓝底胶囊）
+        content.addView(ui.card(padH = 18, padV = 15) {
             addView(ui.row().apply {
-                addView(ui.text("规则效果预览", 14f, R.color.accent, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
-                previewBadge = ui.badge()
+                addView(View(this@FilterActivity).apply {
+                    background = ui.round(R.color.accent, 99)
+                    layoutParams = LinearLayout.LayoutParams(ui.dp(3), ui.dp(14)).apply { marginEnd = ui.dp(8) }
+                })
+                addView(ui.text("规则效果预览", 14f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                previewBadge = ui.valueText()
                 addView(previewBadge)
             })
-            ui.gap(this, 6)
-            summary = ui.text("", 14f, R.color.ink).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+            ui.gap(this, 8)
+            summary = ui.text("", 14f, R.color.muted).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
             addView(summary)
         })
 
         // 第三层：转发方式
         ui.sectionTitle(content, "匹配方式")
         content.addView(ui.card(padH = 14, padV = 14) {
-            val choices = RadioGroup(this@FilterActivity).apply { isSaveEnabled = false }
+            presetGroup = RadioGroup(this@FilterActivity).apply { isSaveEnabled = false }
             val options = listOf(
                 Triple(FilterEditor.Intent.EVERYTHING, R.id.filter_preset_everything, "全部短信\n收到任何新短信都直接转发"),
                 Triple(FilterEditor.Intent.VERIFICATION, R.id.filter_preset_verification, "仅验证码短信 · 推荐\n同时包含“验证码”和 4–6 位数字"),
@@ -235,16 +245,67 @@ class FilterActivity : AppCompatActivity() {
             )
             presetButtons = options.map { (choice, stableId, title) ->
                 val btn = ui.optionRadio(title, stableId)
-                choices.addView(btn)
+                presetGroup.addView(btn)
                 choice to btn
             }
-            choices.check(options.first { it.first == editor.intent }.second)
-            addView(choices)
-            choices.setOnCheckedChangeListener { _, checked ->
+            presetGroup.check(options.first { it.first == editor.intent }.second)
+            addView(presetGroup)
+            presetGroup.setOnCheckedChangeListener { _, checked ->
                 if (!binding) {
                     editor.select(options.first { it.second == checked }.first)
+                    selectedTemplates = PlatformTemplates.detectSelectedIds(editor.rules)
                     bindBodyFields()
                     render()
+                }
+            }
+        })
+
+        // 第三层补充：常用商家平台模板（直接多选，自动启用三段防误转 + 默认安全排除词）
+        ui.sectionTitle(
+            content,
+            "常用平台模板 · 直接勾选",
+            "勾选后自动合并平台关键词、启用验证码字样与 4–6 位数字并填入默认安全排除词，下方仍可自由微调"
+        )
+        content.addView(ui.card(padH = 14, padV = 14) {
+            PlatformCategory.entries.forEachIndexed { catIdx, category ->
+                if (catIdx > 0) ui.gap(this, 10)
+                addView(ui.text(category.displayName, 12f, R.color.muted, bold = true).apply {
+                    setPadding(ui.dp(2), 0, 0, ui.dp(6))
+                })
+                val items = PlatformTemplates.inCategory(category)
+                items.chunked(2).forEach { pair ->
+                    val row = ui.row().apply {
+                        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = ui.dp(8) }
+                    }
+                    pair.forEachIndexed { idx, template ->
+                        val cb = MaterialCheckBox(this@FilterActivity).apply {
+                            text = if (template.isAllVerification) "${template.name}（不限平台，仅验证三段防误转）" else template.name
+                            textSize = 13.5f
+                            setTextColor(ui.color(R.color.ink))
+                            minHeight = ui.dp(46)
+                            setPadding(ui.dp(4), ui.dp(6), ui.dp(10), ui.dp(6))
+                            isSaveEnabled = false
+                            isChecked = template.id in selectedTemplates
+                            setOnCheckedChangeListener { _, checked ->
+                                if (!binding) {
+                                    ui.haptic(this)
+                                    selectedTemplates = PlatformTemplates.toggleSelection(selectedTemplates, template.id, checked)
+                                    editor.applyPlatformTemplates(selectedTemplates)
+                                    bindBodyFields(syncExclude = true)
+                                    render()
+                                }
+                            }
+                        }
+                        templateCheckBoxes[template.id] = cb
+                        val lp = LinearLayout.LayoutParams(0, -2, 1f).apply {
+                            if (pair.size == 2 && idx == 0) marginEnd = ui.dp(8)
+                        }
+                        row.addView(cb, lp)
+                    }
+                    if (pair.size == 1 && !pair.first().isAllVerification) {
+                        row.addView(View(this@FilterActivity), LinearLayout.LayoutParams(0, 1, 1f))
+                    }
+                    addView(row)
                 }
             }
         })
@@ -256,26 +317,36 @@ class FilterActivity : AppCompatActivity() {
             val (includeLayout, includeInput) = ui.textField(
                 stableId = R.id.filter_include,
                 label = "包含以下任意关键词 · 选填",
-                placeholder = "例如：验证码, 登录（每行一个，或用逗号分隔）",
+                placeholder = "例如：美团, 开店宝, 验证码（每行一个，或用逗号分隔）",
                 value = draftFilter.includeKeywords.joinToString("\n"),
                 singleLine = false
             )
             include = includeInput
             addView(includeLayout)
             ui.gap(this, 4)
+            codeWord = ui.checkBox(R.id.filter_code_word, "包含验证码字样（防营销短信误转）", draftFilter.requireCodeWord)
+            addView(codeWord)
+            addView(ui.text("要求正文包含“验证码、动态码、校验码、安全码、确认码、登录码、code”之一。", 12f, R.color.subtle))
+            ui.gap(this, 4)
             digits = ui.checkBox(R.id.filter_digits, "包含连续 4–6 位数字", draftFilter.requireDigits)
             addView(digits)
             addView(ui.text("仅匹配完整数字串，7 位及以上数字（如长订单号）不计入。", 12f, R.color.subtle))
             combination = ui.column().apply {
                 ui.divider(this, top = 12, bottom = 10)
-                addView(ui.text("上面两项的关系", 13f, R.color.muted, bold = true))
+                addView(ui.text("多项正文条件的关系", 13f, R.color.muted, bold = true))
                 ui.gap(this, 4)
                 val group = RadioGroup(this@FilterActivity).apply { isSaveEnabled = false }
                 any = ui.simpleRadio("满足其中一项即可", R.id.filter_any)
-                all = ui.simpleRadio("必须两项同时满足", R.id.filter_all)
+                all = ui.simpleRadio("必须全部同时满足", R.id.filter_all)
                 group.addView(any); group.addView(all)
                 group.check(if (draftFilter.matchAll) R.id.filter_all else R.id.filter_any)
-                group.setOnCheckedChangeListener { _, selected -> if (!binding) { editor.matchAll(selected == R.id.filter_all); render() } }
+                group.setOnCheckedChangeListener { _, selected ->
+                    if (!binding) {
+                        editor.matchAll(selected == R.id.filter_all)
+                        selectedTemplates = PlatformTemplates.detectSelectedIds(editor.rules)
+                        render()
+                    }
+                }
                 addView(group)
             }
             addView(combination)
@@ -342,10 +413,27 @@ class FilterActivity : AppCompatActivity() {
         savedInstanceState?.getString("excludeRaw")?.let { exclude.setText(it) }
         savedInstanceState?.getString("sendersRaw")?.let { senders.setText(it) }
         ruleNameInput.watch { draftName = it; ruleNameLayout.error = null; render() }
-        include.watch { editor.include(FilterEditor.parseList(it)); render() }
+        include.watch {
+            editor.include(FilterEditor.parseList(it))
+            selectedTemplates = PlatformTemplates.detectSelectedIds(editor.rules)
+            render()
+        }
         exclude.watch { editor.exclude(FilterEditor.parseList(it)); render() }
         senders.watch { editor.senders(FilterEditor.parseList(it)); render() }
-        digits.setOnCheckedChangeListener { _, checked -> if (!binding) { editor.digits(checked); render() } }
+        codeWord.setOnCheckedChangeListener { _, checked ->
+            if (!binding) {
+                editor.requireCodeWord(checked)
+                selectedTemplates = PlatformTemplates.detectSelectedIds(editor.rules)
+                render()
+            }
+        }
+        digits.setOnCheckedChangeListener { _, checked ->
+            if (!binding) {
+                editor.digits(checked)
+                selectedTemplates = PlatformTemplates.detectSelectedIds(editor.rules)
+                render()
+            }
+        }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() { requestExit() }
         })
@@ -408,11 +496,17 @@ class FilterActivity : AppCompatActivity() {
         setOnClickListener { ui.haptic(this); onClick() }
     }
 
-    private fun bindBodyFields() {
+    private fun bindBodyFields(syncExclude: Boolean = false) {
         binding = true
+        presetButtons.firstOrNull { it.first == editor.intent }?.second?.id?.let { presetGroup.check(it) }
         include.setText(editor.rules.includeKeywords.joinToString("\n"))
+        codeWord.isChecked = editor.rules.requireCodeWord
         digits.isChecked = editor.rules.requireDigits
         if (editor.rules.matchAll) all.isChecked = true else any.isChecked = true
+        if (syncExclude) {
+            exclude.setText(editor.rules.excludeKeywords.joinToString("\n"))
+        }
+        templateCheckBoxes.forEach { (id, cb) -> cb.isChecked = id in selectedTemplates }
         binding = false
     }
 
@@ -427,8 +521,17 @@ class FilterActivity : AppCompatActivity() {
             button.background = if (selected) ui.round(R.color.accent_surface, 12, R.color.accent)
             else ui.round(R.color.field, 12, R.color.line)
         }
+        binding = true
+        templateCheckBoxes.forEach { (id, cb) ->
+            val checked = id in selectedTemplates
+            if (cb.isChecked != checked) cb.isChecked = checked
+            cb.background = if (checked) ui.round(R.color.accent_surface, 12, R.color.accent)
+            else ui.round(R.color.field, 12, R.color.line)
+        }
+        binding = false
         custom.visibility = if (editor.intent == FilterEditor.Intent.CUSTOM) View.VISIBLE else View.GONE
-        combination.visibility = if (rules.includeKeywords.isNotEmpty() && rules.requireDigits) View.VISIBLE else View.GONE
+        val activeBodyConditions = listOf(rules.includeKeywords.isNotEmpty(), rules.requireCodeWord, rules.requireDigits).count { it }
+        combination.visibility = if (activeBodyConditions >= 2) View.VISIBLE else View.GONE
         optional.visibility = if (rules.enabled) View.VISIBLE else View.GONE
         excludeFields.visibility = if (excludeOpen) View.VISIBLE else View.GONE
         senderFields.visibility = if (senderOpen) View.VISIBLE else View.GONE
@@ -442,7 +545,7 @@ class FilterActivity : AppCompatActivity() {
         summary.text = destPrefix + FilterDescriptions.describe(rules) + statusSuffix
 
         val unsaved = isRuleDirty() || invalidSaved
-        ui.styleBadge(previewBadge, if (unsaved) "草稿预览" else "当前生效", if (unsaved) Ui.Tone.WARNING else Ui.Tone.SUCCESS)
+        ui.setValueText(previewBadge, if (unsaved) "草稿预览" else "生效中", if (unsaved) R.color.warning else R.color.subtle)
         dirty.text = if (unsaved) "有未保存修改 · 现在收到的短信仍按旧规则处理" else "当前规则已保存"
         dirty.setTextColor(ui.color(if (unsaved) R.color.warning else R.color.subtle))
         save.text = if (editingRuleId == null) "保存新规则" else "保存并生效"
@@ -517,8 +620,18 @@ class FilterActivity : AppCompatActivity() {
             bodyLayout.addView(ui.row().apply {
                 addView(View(this@FilterActivity), LinearLayout.LayoutParams(0, 1, 1f))
                 addView(ui.ghostButton("填入示例短信") {
-                    val labels = arrayOf("验证码短信", "仅含六位数字", "含“银行”字样", "仅含七位数字", "普通通知")
+                    val labels = arrayOf(
+                        "美团登录验证码",
+                        "美团 8888 元满减营销短信",
+                        "验证码短信",
+                        "仅含六位数字",
+                        "含“银行”字样",
+                        "仅含七位数字",
+                        "普通通知"
+                    )
                     val samples = arrayOf(
+                        "【美团】您的登录验证码为 618294，5 分钟内有效，请勿泄露。",
+                        "【美团】领 8888 元满减券，限时优惠立减，退订回T。",
                         "【示例】验证码为123456，请忽略本测试短信。",
                         "【示例】您的订单编号为123456。",
                         "【银行】验证码为123456，请忽略本测试短信。",
@@ -598,6 +711,7 @@ class FilterActivity : AppCompatActivity() {
         outState.putString("intent", editor.intent.name)
         outState.putBoolean("invalidSaved", invalidSaved)
         outState.putBoolean("excludeOpen", excludeOpen); outState.putBoolean("senderOpen", senderOpen)
+        outState.putStringArrayList("selectedTemplates", ArrayList(selectedTemplates))
         outState.putString("includeRaw", include.text?.toString().orEmpty())
         outState.putString("excludeRaw", exclude.text?.toString().orEmpty())
         outState.putString("sendersRaw", senders.text?.toString().orEmpty())
@@ -607,17 +721,23 @@ class FilterActivity : AppCompatActivity() {
     }
 
     private fun writeRules(rules: FilterRules) = Bundle().apply {
-        putBoolean("enabled", rules.enabled); putBoolean("digits", rules.requireDigits); putBoolean("all", rules.matchAll)
-        putStringArrayList("include", ArrayList(rules.includeKeywords)); putStringArrayList("exclude", ArrayList(rules.excludeKeywords)); putStringArrayList("senders", ArrayList(rules.allowedSenders))
+        putBoolean("enabled", rules.enabled)
+        putBoolean("digits", rules.requireDigits)
+        putBoolean("all", rules.matchAll)
+        putBoolean("codeWord", rules.requireCodeWord)
+        putStringArrayList("include", ArrayList(rules.includeKeywords))
+        putStringArrayList("exclude", ArrayList(rules.excludeKeywords))
+        putStringArrayList("senders", ArrayList(rules.allowedSenders))
     }
 
     private fun readRules(bundle: Bundle) = FilterRules(
-        bundle.getBoolean("enabled"),
-        bundle.getStringArrayList("include").orEmpty(),
-        bundle.getBoolean("digits"),
-        bundle.getBoolean("all"),
-        bundle.getStringArrayList("exclude").orEmpty(),
-        bundle.getStringArrayList("senders").orEmpty()
+        enabled = bundle.getBoolean("enabled"),
+        includeKeywords = bundle.getStringArrayList("include").orEmpty(),
+        requireDigits = bundle.getBoolean("digits"),
+        matchAll = bundle.getBoolean("all"),
+        excludeKeywords = bundle.getStringArrayList("exclude").orEmpty(),
+        allowedSenders = bundle.getStringArrayList("senders").orEmpty(),
+        requireCodeWord = bundle.getBoolean("codeWord", false),
     )
 
     private fun EditText.watch(changed: (String) -> Unit) {
