@@ -13,12 +13,21 @@ class FilterEditor(val saved: FilterRules, initial: FilterRules = saved, selecte
         intent = value
         rules = when (value) {
             Intent.EVERYTHING -> rules.copy(enabled = false)
-            Intent.VERIFICATION -> rules.copy(enabled = true, includeKeywords = listOf("验证码"), requireDigits = true, matchAll = true)
-            Intent.VERIFICATION_OR_DIGITS -> rules.copy(enabled = true, includeKeywords = listOf("验证码"), requireDigits = true, matchAll = false)
+            Intent.VERIFICATION -> rules.copy(enabled = true, includeKeywords = listOf("验证码"), requireDigits = true, matchAll = true, requireCodeWord = false)
+            Intent.VERIFICATION_OR_DIGITS -> rules.copy(enabled = true, includeKeywords = listOf("验证码"), requireDigits = true, matchAll = false, requireCodeWord = false)
             Intent.CUSTOM -> rules.copy(enabled = true)
         }
     }
+    fun applyPlatformTemplates(selectedIds: Set<String>) {
+        if (selectedIds.isEmpty()) {
+            rules = rules.copy(includeKeywords = emptyList())
+            return
+        }
+        intent = Intent.CUSTOM
+        rules = PlatformTemplates.buildRules(selectedIds, rules)
+    }
     fun include(values: List<String>) { rules = rules.copy(includeKeywords = values) }
+    fun requireCodeWord(value: Boolean) { rules = rules.copy(requireCodeWord = value) }
     fun digits(value: Boolean) { rules = rules.copy(requireDigits = value) }
     fun matchAll(value: Boolean) { rules = rules.copy(matchAll = value) }
     fun exclude(values: List<String>) { rules = rules.copy(excludeKeywords = values) }
@@ -27,7 +36,7 @@ class FilterEditor(val saved: FilterRules, initial: FilterRules = saved, selecte
     companion object {
         fun identify(rules: FilterRules): Intent = when {
             !rules.enabled -> Intent.EVERYTHING
-            rules.includeKeywords == listOf("验证码") && rules.requireDigits ->
+            !rules.requireCodeWord && rules.includeKeywords == listOf("验证码") && rules.requireDigits ->
                 if (rules.matchAll) Intent.VERIFICATION else Intent.VERIFICATION_OR_DIGITS
             else -> Intent.CUSTOM
         }

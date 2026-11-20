@@ -1,70 +1,67 @@
 package com.kidbuddy.smsforwarder
 
 import android.Manifest
-import android.app.Activity
-import android.app.AlertDialog
-import android.content.Context
+import android.app.ActivityManager
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
-import android.text.InputType
-import android.text.method.PasswordTransformationMethod
+import android.os.PowerManager
+import android.view.Gravity
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.widget.Button
-import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
     private lateinit var ui: Ui
-    private lateinit var webhook: EditText
-    private lateinit var secret: EditText
-    private lateinit var toggle: Switch
+    private lateinit var powerRing: View
+    private lateinit var powerButton: FrameLayout
+    private lateinit var powerIcon: ImageView
     private lateinit var stateTitle: TextView
     private lateinit var stateDetail: TextView
-    private lateinit var queueValue: TextView
-    private lateinit var permissionValue: TextView
+    private lateinit var testChip: LinearLayout
+    private lateinit var setupSection: LinearLayout
+    private lateinit var stepPermValue: TextView
+    private lateinit var stepDestValue: TextView
+    private lateinit var stepRuleValue: TextView
     private lateinit var latest: TextView
     private lateinit var latestTime: TextView
-    private lateinit var configSummary: TextView
-    private lateinit var configFields: LinearLayout
-    private lateinit var configButton: Button
-    private lateinit var configHint: TextView
-    private lateinit var saveButton: Button
-    private lateinit var testButton: Button
-    private lateinit var retryButton: Button
-    private lateinit var clearButton: Button
-    private lateinit var permissionButton: Button
+    private lateinit var queueCard: MaterialCardView
+    private lateinit var queueCountText: TextView
     private lateinit var queueHint: TextView
-    private lateinit var filterSummary: TextView
-    private var updatingToggle = false
-    private var configExpanded = false
-    private var showCredentials = false
+    private lateinit var retryButton: MaterialButton
+    private lateinit var clearButton: MaterialButton
+    private lateinit var destSummary: TextView
+    private lateinit var destValue: TextView
+    private lateinit var ruleSummary: TextView
+    private lateinit var ruleValue: TextView
+    private lateinit var permissionSummary: TextView
+    private lateinit var permissionValue: TextView
+    private var heroStateCache = ""
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() { renderStatus(); handler.postDelayed(this, 1500) }
     }
 
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(AppAppearance.wrap(newBase))
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
+        AppAppearance.apply(this)
         super.onCreate(savedInstanceState)
         ui = Ui(this)
-        val content = ui.column().apply { setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(24)) }
+        val content = ui.column().apply { setPadding(ui.dp(18), ui.dp(12), ui.dp(18), ui.dp(28)) }
+        ui.enableMotion(content)
         val scroll = ScrollView(this).apply {
             id = R.id.main_scroll
             isFillViewport = true
@@ -73,242 +70,245 @@ class MainActivity : Activity() {
             addView(content)
         }
         setContentView(scroll)
+
+        // 顶部精简栏：左侧轻量应用名，右侧无框外观切换
+        val modes = arrayOf("system", "light", "dark")
+        val modeLabels = arrayOf("跟随系统", "浅色模式", "深色模式")
+        val modeShort = arrayOf("自动", "浅色", "深色")
+        val appearance = getSharedPreferences("appearance", MODE_PRIVATE)
+        val selectedMode = modes.indexOf(appearance.getString("mode", "system")).coerceAtLeast(0)
+
         content.addView(ui.row().apply {
             addView(ImageView(this@MainActivity).apply {
                 setImageResource(R.drawable.ic_forward)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(ui.dp(44), ui.dp(44)).apply { rightMargin = ui.dp(12) })
-            addView(ui.column().apply {
-                addView(ui.text("短信转发", 25f, bold = true))
-                addView(ui.text("Android 短信，送达飞书", 14f, R.color.muted))
-            })
-        })
-        ui.gap(content, 24)
-
-        // 首屏只突出开关、待发数量和权限，不把配置表单放在主操作之前。
-        content.addView(ui.card(R.color.accent_surface).apply {
+            }, LinearLayout.LayoutParams(ui.dp(28), ui.dp(28)).apply { marginEnd = ui.dp(8) })
+            addView(ui.text("短信转发", 18f, bold = true).apply { isAccessibilityHeading = true },
+                LinearLayout.LayoutParams(0, -2, 1f))
             addView(ui.row().apply {
-                addView(ui.column().apply {
-                    addView(ui.text("自动转发", 13f, R.color.muted, true))
-                    stateTitle = ui.text("", 24f, bold = true)
-                    addView(stateTitle)
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                toggle = Switch(this@MainActivity).apply {
-                    contentDescription = "自动转发短信到飞书"
-                    minWidth = ui.dp(64)
-                    minHeight = ui.dp(48)
-                    setPadding(ui.dp(8), 0, 0, 0)
-                    isSaveEnabled = false
-                    isChecked = State.enabled(this@MainActivity)
+                minimumHeight = ui.dp(40)
+                contentDescription = "外观：${modeLabels[selectedMode]}"
+                setPadding(ui.dp(10), ui.dp(6), ui.dp(10), ui.dp(6))
+                background = ui.transparentRipple(99)
+                addView(ui.icon(R.drawable.ic_theme, 16, R.color.muted).apply {
+                    layoutParams = LinearLayout.LayoutParams(ui.dp(16), ui.dp(16)).apply { marginEnd = ui.dp(5) }
+                })
+                addView(ui.text(modeShort[selectedMode], 13f, R.color.muted))
+                setOnClickListener {
+                    ui.haptic(this)
+                    ui.dialog().setTitle("选择外观")
+                        .setSingleChoiceItems(modeLabels, selectedMode) { dialog, which ->
+                            appearance.edit().putString("mode", modes[which]).apply()
+                            dialog.dismiss()
+                            AppAppearance.apply(this@MainActivity)
+                            recreate()
+                        }.setNegativeButton("取消", null).show()
                 }
-                addView(toggle)
             })
-            ui.gap(this, 8)
-            stateDetail = ui.text("", 14f, R.color.muted)
-            addView(stateDetail)
-            ui.divider(this)
-            addView(ui.row().apply {
-                addView(ui.column().apply {
-                    queueValue = ui.text("0 条", 20f, bold = true)
-                    addView(queueValue)
-                    addView(ui.text("等待发送", 13f, R.color.muted))
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(ui.column().apply {
-                    permissionValue = ui.text("", 16f, bold = true)
-                    addView(permissionValue)
-                    addView(ui.text("短信权限", 13f, R.color.muted))
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-            })
-            ui.gap(this, 20)
-            testButton = ui.button("发送测试消息", primary = true) { sendTest() }
-            addView(testButton)
         })
 
-        content.addView(ui.card().apply {
-            addView(ui.text("最近动态", 16f, bold = true))
-            ui.gap(this, 12)
-            latest = ui.text("", 15f)
+        // 头部约 1/3 屏 Hero 主控开关区：居中超大圆形主控按钮 + 状态标题与副文
+        content.addView(ui.column().apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, ui.dp(18), 0, ui.dp(22))
+            ui.enableMotion(this)
+
+            val dialContainer = FrameLayout(this@MainActivity).apply {
+                layoutParams = LinearLayout.LayoutParams(ui.dp(156), ui.dp(156))
+                clipChildren = false
+                clipToPadding = false
+            }
+
+            powerRing = View(this@MainActivity)
+            dialContainer.addView(powerRing, FrameLayout.LayoutParams(ui.dp(156), ui.dp(156), Gravity.CENTER))
+
+            powerIcon = ui.icon(R.drawable.ic_power, 42, R.color.muted)
+            powerButton = FrameLayout(this@MainActivity).apply {
+                elevation = ui.dp(6).toFloat()
+                isClickable = true
+                isFocusable = true
+                addView(powerIcon, FrameLayout.LayoutParams(ui.dp(42), ui.dp(42), Gravity.CENTER))
+                setOnClickListener {
+                    ui.haptic(this)
+                    if (ui.motionEnabled()) {
+                        animate().scaleX(0.93f).scaleY(0.93f).setDuration(90L).withEndAction {
+                            animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+                        }.start()
+                    }
+                    changeEnabled(!State.enabled(this@MainActivity))
+                }
+            }
+            dialContainer.addView(powerButton, FrameLayout.LayoutParams(ui.dp(116), ui.dp(116), Gravity.CENTER))
+            addView(dialContainer)
+
+            ui.gap(this, 16)
+            stateTitle = ui.text("", 20f, bold = true).apply { gravity = Gravity.CENTER }
+            addView(stateTitle)
+            ui.gap(this, 4)
+            stateDetail = ui.text("", 13.5f, R.color.muted).apply { gravity = Gravity.CENTER }
+            addView(stateDetail)
+
+            // 运行中居中轻胶囊：发送测试消息
+            testChip = ui.row().apply {
+                minimumHeight = ui.dp(40)
+                setPadding(ui.dp(16), ui.dp(8), ui.dp(16), ui.dp(8))
+                background = ui.ripple(R.color.surface, 99)
+                elevation = ui.dp(1).toFloat()
+                addView(ui.icon(R.drawable.ic_send, 15, R.color.accent).apply {
+                    layoutParams = LinearLayout.LayoutParams(ui.dp(15), ui.dp(15)).apply { marginEnd = ui.dp(6) }
+                })
+                addView(ui.text("发送测试消息", 13.5f, R.color.ink, bold = true))
+                setOnClickListener {
+                    ui.haptic(this)
+                    sendTest()
+                }
+                layoutParams = LinearLayout.LayoutParams(-2, -2).apply { topMargin = ui.dp(14) }
+            }
+            addView(testChip)
+        })
+
+        // 未就绪时的 3 步准备清单（仅未就绪时显示，0 内边距卡片 + cell 满宽按压态）
+        setupSection = ui.column().apply {
+            ui.sectionTitle(this, "开启前准备")
+            addView(ui.listCard {
+                stepPermValue = ui.valueText()
+                addView(stepRow("1. 授予接收短信权限", stepPermValue) { openPermissions() })
+                ui.insetDivider(this, startDp = 18, endDp = 18)
+                stepDestValue = ui.valueText()
+                addView(stepRow("2. 添加转发目的地", stepDestValue) {
+                    val hasDest = runCatching { ConfigStore.load(this@MainActivity).destinations.isNotEmpty() }.getOrDefault(false)
+                    startActivity(Intent(this@MainActivity, if (hasDest) DestinationsActivity::class.java else DestinationEditActivity::class.java))
+                })
+                ui.insetDivider(this, startDp = 18, endDp = 18)
+                stepRuleValue = ui.valueText()
+                addView(stepRow("3. 设置并启用转发规则", stepRuleValue) {
+                    startActivity(Intent(this@MainActivity, RulesActivity::class.java))
+                })
+            })
+        }
+        content.addView(setupSection)
+
+        // 最近动态
+        content.addView(ui.card(padH = 18, padV = 15) {
+            addView(ui.row().apply {
+                addView(ui.text("最近动态", 13f, R.color.subtle), LinearLayout.LayoutParams(0, -2, 1f))
+                latestTime = ui.text("", 12f, R.color.subtle)
+                addView(latestTime)
+            })
+            ui.gap(this, 6)
+            latest = ui.text("", 14.5f)
             latest.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             addView(latest)
-            ui.gap(this, 8)
-            latestTime = ui.text("", 12f, R.color.muted)
-            addView(latestTime)
         })
 
-        content.addView(ui.card().apply {
-            addView(ui.text("哪些短信要转发", 17f, bold = true))
-            ui.gap(this, 8)
-            filterSummary = ui.text("", 14f, R.color.muted)
-            addView(filterSummary)
-            ui.gap(this, 16)
-            addView(ui.button("设置转发范围") {
-                startActivity(Intent(this@MainActivity, FilterActivity::class.java))
-            })
-        })
-
-        content.addView(ui.card().apply {
+        // 待发队列（仅在有积压时浮现）
+        queueCard = ui.card(padH = 18, padV = 15) {
             addView(ui.row().apply {
-                addView(ui.column().apply {
-                    addView(ui.text("飞书配置", 17f, bold = true))
-                    configSummary = ui.text("", 13f, R.color.muted)
-                    addView(configSummary)
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-                configButton = ui.button("编辑") { openConfigEditor() }.apply {
-                    contentDescription = "编辑飞书配置，运行中会先暂停转发"
-                }
-                addView(configButton, LinearLayout.LayoutParams(ui.dp(112), -2).apply { leftMargin = ui.dp(8) })
+                addView(ui.text("待发队列", 15.5f, bold = true), LinearLayout.LayoutParams(0, -2, 1f))
+                queueCountText = ui.valueText("", R.color.warning)
+                addView(queueCountText)
             })
-            configFields = ui.column()
-            addView(configFields)
-            ui.gap(configFields, 16)
-            configFields.addView(ui.text("机器人 Webhook", 14f, bold = true))
-            ui.gap(configFields, 8)
-            webhook = credentialField(R.id.webhook_input, "粘贴飞书机器人的 HTTPS 地址")
-            webhook.setText(State.prefs(this@MainActivity).getString("webhook", ""))
-            configFields.addView(webhook)
-            ui.gap(configFields, 16)
-            configFields.addView(ui.text("签名密钥 · 选填", 14f, bold = true))
-            ui.gap(configFields, 8)
-            secret = credentialField(R.id.secret_input, "仅在机器人启用签名校验时填写")
-            secret.setText(State.prefs(this@MainActivity).getString("secret", ""))
-            configFields.addView(secret)
-            ui.gap(configFields, 8)
-            configFields.addView(ui.button("显示地址与密钥") {
-                showCredentials = !showCredentials
-                listOf(webhook, secret).forEach {
-                    it.transformationMethod = if (showCredentials) null else PasswordTransformationMethod.getInstance()
-                    it.setSelection(it.text.length)
-                }
-                revealButtonText()
-            }.apply { tag = "reveal" })
-            ui.gap(configFields, 12)
-            configHint = ui.text("", 13f, R.color.muted)
-            configFields.addView(configHint)
-            ui.gap(configFields, 12)
-            saveButton = ui.button("保存配置", primary = true) { saveConfig() }
-            configFields.addView(saveButton)
-        })
-
-        content.addView(ui.card().apply {
-            addView(ui.text("后台运行", 17f, bold = true))
-            ui.gap(this, 8)
-            addView(ui.text("MIUI 请允许自启动，并将省电策略设为“无限制”，避免锁屏后延迟转发。", 14f, R.color.muted))
-            ui.gap(this, 16)
-            permissionButton = ui.button("授权接收短信") { requestPermissions(arrayOf(Manifest.permission.RECEIVE_SMS), 1) }
-            addView(permissionButton)
-            ui.gap(this, 8)
-            addView(ui.button("打开系统应用设置") {
-                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
-            })
-        })
-
-        content.addView(ui.card().apply {
-            addView(ui.text("待发队列", 17f, bold = true))
-            ui.gap(this, 8)
-            queueHint = ui.text("", 14f, R.color.muted)
+            ui.gap(this, 6)
+            queueHint = ui.text("", 13f, R.color.muted)
             addView(queueHint)
-            ui.gap(this, 16)
-            retryButton = ui.button("重试待发消息") { retryQueue() }
-            addView(retryButton)
-            ui.gap(this, 8)
-            clearButton = ui.button("清空待发队列", danger = true) { clearQueue() }
-            addView(clearButton)
-        })
-        content.addView(ui.text("选中的短信会发送到所设飞书群，请仅使用可信私人群。暂停期间收到的短信不会补发。", 13f, R.color.muted))
-        ui.gap(content, 12)
-        content.addView(ui.text("本机暂存 · 成功后删除 · 不读取历史短信", 12f, R.color.muted))
-        ui.gap(content, 16)
-        val modes = arrayOf("system", "light", "dark")
-        val names = arrayOf("跟随系统", "浅色", "深色")
-        val appearance = getSharedPreferences("appearance", MODE_PRIVATE)
-        val selected = modes.indexOf(appearance.getString("mode", "system")).coerceAtLeast(0)
-        content.addView(ui.button("外观：${names[selected]}") {
-            AlertDialog.Builder(this).setTitle("选择外观")
-                .setSingleChoiceItems(names, selected) { dialog, which ->
-                    appearance.edit().putString("mode", modes[which]).apply()
-                    dialog.dismiss()
-                    recreate()
-                }.setNegativeButton("取消", null).show()
+            ui.gap(this, 12)
+            addView(ui.row().apply {
+                retryButton = ui.button("重试发送") { retryQueue() }.apply {
+                    layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(8) }
+                }
+                clearButton = ui.button("清空队列", danger = true) { clearQueue() }.apply {
+                    layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                }
+                addView(retryButton)
+                addView(clearButton)
+            })
+        }
+        content.addView(queueCard)
+
+        // 转发设置分组卡（HyperOS / Apple 设置风：32dp 彩色圆角图标块 + 满宽按压态 + 发丝内缩分割线）
+        ui.sectionTitle(content, "转发设置")
+        content.addView(ui.listCard {
+            destSummary = ui.text("", 12.5f, R.color.subtle)
+            destValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_send, R.color.tile_blue, "转发目的地", destSummary, trailingValue(destValue)) {
+                startActivity(Intent(this@MainActivity, DestinationsActivity::class.java))
+            })
+
+            ui.insetDivider(this, startDp = 62, endDp = 18)
+
+            ruleSummary = ui.text("", 12.5f, R.color.subtle)
+            ruleValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_filter, R.color.tile_indigo, "转发规则", ruleSummary, trailingValue(ruleValue)) {
+                startActivity(Intent(this@MainActivity, RulesActivity::class.java))
+            })
+
+            ui.insetDivider(this, startDp = 62, endDp = 18)
+
+            permissionSummary = ui.text("", 12.5f, R.color.subtle)
+            permissionValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_shield, R.color.tile_green, "权限与后台保活", permissionSummary, trailingValue(permissionValue)) {
+                openPermissions()
+            })
         })
 
-        toggle.setOnCheckedChangeListener { _, checked -> if (!updatingToggle) changeEnabled(checked) }
-        setConfigExpanded(savedInstanceState?.getBoolean("configExpanded")
-            ?: !Protocol.validWebhook(State.prefs(this).getString("webhook", "").orEmpty()))
+        // 页脚安全与隐私说明（面向普通用户的大白话）
+        content.addView(ui.text(
+            "只发给你指定的群 · 不翻看旧短信 · 不留存内容",
+            12f, R.color.subtle
+        ).apply {
+            gravity = Gravity.CENTER
+            setPadding(ui.dp(6), ui.dp(4), ui.dp(6), 0)
+        })
+
         renderStatus()
     }
 
-    private fun credentialField(stableId: Int, placeholder: String) = EditText(this).apply {
-        id = stableId
-        hint = placeholder
-        textSize = 14f
-        setTextColor(ui.color(R.color.ink))
-        setHintTextColor(ui.color(R.color.muted))
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        transformationMethod = PasswordTransformationMethod.getInstance()
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        setSingleLine(true)
-        minHeight = ui.dp(52)
-        setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12))
-        background = ui.round(R.color.field, 10, R.color.line)
-        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-        layoutParams = LinearLayout.LayoutParams(-1, -2)
+    private fun circleDrawable(fillColorRes: Int, strokeColorRes: Int? = null, strokeDp: Int = 1) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(ui.color(fillColorRes))
+        strokeColorRes?.let { setStroke(ui.dp(strokeDp), ui.color(it)) }
     }
 
-    private fun revealButtonText() {
-        configFields.findViewWithTag<Button>("reveal").text = if (showCredentials) "隐藏地址与密钥" else "显示地址与密钥"
+    private fun circleRipple(fillColorRes: Int) = RippleDrawable(
+        ui.colorList(R.color.ripple),
+        circleDrawable(fillColorRes),
+        null
+    )
+
+    private fun trailingValue(valueView: TextView) = ui.row().apply {
+        addView(valueView)
+        addView(ui.chevronRight())
     }
 
-    private fun openConfigEditor() {
-        if (configExpanded) { setConfigExpanded(false); return }
-        synchronized(State.gate) {
-            if (State.enabled(this)) {
-                if (!State.prefs(this).edit().putBoolean("enabled", false).commit()) {
-                    // commit 写盘失败时内存值仍可能已变化，恢复后继续锁住配置。
-                    State.prefs(this).edit().putBoolean("enabled", true).apply()
-                    toast("暂停失败，请重试后编辑")
-                    renderStatus()
-                    return
-                }
-                ForwardJob.cancel(this)
-                toast("已暂停转发，可以编辑飞书配置")
-            }
-            setConfigExpanded(true)
-            renderStatus()
-        }
+    private fun stepRow(label: String, valueView: TextView, action: () -> Unit) = ui.row().apply {
+        minimumHeight = ui.dp(50)
+        setPadding(ui.dp(18), ui.dp(11), ui.dp(18), ui.dp(11))
+        background = ui.transparentRipple(0)
+        addView(ui.text(label, 14.5f), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(valueView, LinearLayout.LayoutParams(-2, -2).apply { marginStart = ui.dp(8) })
+        addView(ui.chevronRight())
+        setOnClickListener { ui.haptic(this); action() }
     }
 
-    private fun setConfigExpanded(expanded: Boolean) {
-        configExpanded = expanded
-        configFields.visibility = if (expanded) View.VISIBLE else View.GONE
-        configButton.text = when { expanded -> "收起"; State.enabled(this) -> "暂停编辑"; else -> "编辑" }
-        if (!expanded) {
-            showCredentials = false
-            listOf(webhook, secret).forEach { it.transformationMethod = PasswordTransformationMethod.getInstance(); it.clearFocus() }
-            revealButtonText()
-            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(webhook.windowToken, 0)
-        }
-    }
-
-    private fun saveConfig() {
-        synchronized(State.gate) {
-            when {
-                State.enabled(this) -> toast("请先暂停转发，再保存")
-                Store(this).use { it.count() } > 0 -> toast("请先清空待发队列，避免发往新的群")
-                !Protocol.validWebhook(webhook.text.toString().trim()) -> {
-                    webhook.error = "请输入有效的飞书机器人 HTTPS 地址"
-                    webhook.requestFocus()
-                }
-                else -> {
-                    val prefs = State.prefs(this)
-                    val saved = prefs.edit().putString("webhook", webhook.text.toString().trim())
-                        .putString("secret", secret.text.toString().trim())
-                        .putLong("generation", prefs.getLong("generation", 0) + 1).commit()
-                    if (saved) { webhook.error = null; setConfigExpanded(false); toast("飞书配置已保存，请开启自动转发") }
-                    else toast("保存失败，请检查手机存储空间后重试")
-                    renderStatus()
-                }
-            }
-        }
+    private fun settingEntry(
+        iconRes: Int,
+        tileColorRes: Int,
+        title: String,
+        subtitleView: TextView,
+        trailing: View,
+        action: () -> Unit
+    ) = ui.row().apply {
+        minimumHeight = ui.dp(64)
+        setPadding(ui.dp(18), ui.dp(13), ui.dp(18), ui.dp(13))
+        background = ui.transparentRipple(0)
+        addView(ui.iconTile(iconRes, tileColorRes, sizeDp = 32, iconSizeDp = 17, radiusDp = 9))
+        addView(ui.column().apply {
+            addView(ui.text(title, 15.5f, bold = true))
+            ui.gap(this, 2)
+            addView(subtitleView)
+        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = ui.dp(10) })
+        addView(trailing)
+        setOnClickListener { ui.haptic(this); action() }
     }
 
     private fun changeEnabled(checked: Boolean) {
@@ -319,26 +319,34 @@ class MainActivity : Activity() {
                 renderStatus()
                 return
             }
-            // 以实际保存状态驱动开关，避免确认前就显示为运行中。
-            syncToggle()
             if (!hasSmsPermission()) {
-                toast("请先授权接收短信")
-                requestPermissions(arrayOf(Manifest.permission.RECEIVE_SMS), 1)
+                toast("请先授予接收短信权限")
+                openPermissions()
                 return
             }
-            if (!Protocol.validWebhook(State.prefs(this).getString("webhook", "").orEmpty())) {
-                setConfigExpanded(true)
-                webhook.error = "请先填写并保存飞书机器人地址"
-                webhook.requestFocus()
-                toast("请先保存飞书配置")
+            val configResult = runCatching { ConfigStore.load(this) }
+            if (configResult.isFailure) {
+                toast("转发配置异常，请检查目的地与规则设置")
                 return
             }
-            AlertDialog.Builder(this).setTitle("开启自动转发")
-                .setMessage("符合短信筛选设置的新短信，以及已有待发消息，将发送到已保存的飞书群，内容可能包含验证码。请确认群内都是可信成员。")
+            val config = configResult.getOrThrow()
+            if (config.destinations.isEmpty()) {
+                toast("请先添加一个转发目的地")
+                startActivity(Intent(this, DestinationEditActivity::class.java))
+                return
+            }
+            if (!config.hasActiveRoute()) {
+                toast("请先添加并启用至少一条转发规则")
+                startActivity(Intent(this, RulesActivity::class.java))
+                return
+            }
+            ui.dialog().setTitle("开启自动转发")
+                .setMessage("符合已启用规则的新短信及已有待发消息，将发送到对应目的地，内容可能包含验证码。请确认接收群均为可信成员。")
                 .setPositiveButton("开启") { _, _ ->
                     synchronized(State.gate) {
-                        val prefs = State.prefs(this)
-                        if (hasSmsPermission() && Protocol.validWebhook(prefs.getString("webhook", "").orEmpty())) {
+                        val latestConfig = runCatching { ConfigStore.load(this) }.getOrNull()
+                        if (hasSmsPermission() && latestConfig != null && latestConfig.hasActiveRoute()) {
+                            val prefs = State.prefs(this)
                             if (prefs.edit().putBoolean("enabled", true).putLong("generation", prefs.getLong("generation", 0) + 1).commit()) {
                                 ForwardJob.schedule(this)
                             } else toast("开启失败，请重试")
@@ -351,14 +359,35 @@ class MainActivity : Activity() {
 
     private fun sendTest() {
         if (!State.enabled(this)) { toast("请先开启自动转发"); return }
-        AlertDialog.Builder(this).setTitle("发送测试消息")
-            .setMessage("将向已保存的飞书群发送一条测试消息，不包含真实短信。")
+        val config = runCatching { ConfigStore.load(this) }.getOrNull()
+        val dests = config?.destinations.orEmpty()
+        if (dests.isEmpty()) {
+            toast("请先添加转发目的地")
+            return
+        }
+        if (dests.size == 1) {
+            confirmSendTest(dests.single())
+            return
+        }
+        val names = dests.map { "${it.name}（${it.type.displayName}）" }.toTypedArray()
+        ui.dialog()
+            .setTitle("选择测试目的地")
+            .setItems(names) { _, which -> confirmSendTest(dests[which]) }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun confirmSendTest(dest: Destination) {
+        ui.dialog()
+            .setTitle("发送测试消息")
+            .setMessage("将向${dest.type.displayName}「${dest.name}」发送一条测试消息，不包含真实短信。")
             .setPositiveButton("发送") { _, _ ->
                 try {
                     synchronized(State.gate) {
                         if (!State.enabled(this)) { toast("转发已暂停"); return@setPositiveButton }
-                        Store(this).use { it.add("短信转发\n测试消息：安卓手机已准备好，收到此消息表示飞书连接成功。") }
-                        State.status(this, "测试消息已入队，等待飞书确认")
+                        val text = "短信转发\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
+                        Store(this).use { it.add(text, null, dest.id, "测试消息") }
+                        State.status(this, "测试消息已入队，等待「${dest.name}」确认")
                         ForwardJob.schedule(this)
                     }
                 } catch (e: IllegalArgumentException) { toast(e.message.orEmpty()) }
@@ -379,7 +408,7 @@ class MainActivity : Activity() {
 
     private fun clearQueue() {
         if (State.enabled(this)) { toast("请先暂停转发"); return }
-        AlertDialog.Builder(this).setTitle("清空待发队列？")
+        ui.dialog().setTitle("清空待发队列？")
             .setMessage("删除全部待发消息后，无法补发。手机原来的短信会保留。")
             .setPositiveButton("清空") { _, _ ->
                 synchronized(State.gate) {
@@ -391,12 +420,9 @@ class MainActivity : Activity() {
             }.setNegativeButton("取消", null).show()
     }
 
+    private fun openPermissions() { startActivity(Intent(this, PermissionActivity::class.java)) }
+
     private fun hasSmsPermission() = checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
-    private fun syncToggle() {
-        updatingToggle = true
-        toggle.isChecked = State.enabled(this)
-        updatingToggle = false
-    }
     private fun toast(value: String) { Toast.makeText(this, value, Toast.LENGTH_LONG).show() }
     private fun TextView.showText(value: String) { if (text.toString() != value) text = value }
 
@@ -405,53 +431,133 @@ class MainActivity : Activity() {
         val prefs = State.prefs(this)
         val enabled = State.enabled(this)
         val permission = hasSmsPermission()
-        val configured = Protocol.validWebhook(prefs.getString("webhook", "").orEmpty())
-        val filter = runCatching { FilterSettings.load(this) }
+        val configResult = runCatching { ConfigStore.load(this) }
+        val config = configResult.getOrNull()
+        val hasDest = config != null && config.destinations.isNotEmpty()
+        val hasActiveRoute = config != null && config.hasActiveRoute()
+        val ready = permission && hasDest && hasActiveRoute && configResult.isSuccess
         val count = Store(this).use { it.count() }
-        syncToggle()
-        stateTitle.showText(when { !enabled -> "转发已暂停"; !permission -> "等待短信授权"; else -> "转发已开启" })
+
+        val isRunning = enabled && ready
+        val nextHeroState = when {
+            isRunning -> "running"
+            !ready -> "pending"
+            else -> "paused"
+        }
+        if (heroStateCache != nextHeroState) {
+            heroStateCache = nextHeroState
+            when (nextHeroState) {
+                "running" -> {
+                    powerRing.background = circleDrawable(R.color.accent_surface, R.color.accent, strokeDp = 1)
+                    powerButton.background = circleRipple(R.color.accent)
+                    powerIcon.imageTintList = ui.colorList(R.color.on_accent)
+                    powerButton.contentDescription = "自动转发运行中，点按暂停转发"
+                }
+                "pending" -> {
+                    powerRing.background = circleDrawable(R.color.warning_surface)
+                    powerButton.background = circleRipple(R.color.surface)
+                    powerIcon.imageTintList = ui.colorList(R.color.warning)
+                    powerButton.contentDescription = "尚未完成转发准备，点按查看所需配置"
+                }
+                else -> {
+                    powerRing.background = circleDrawable(R.color.neutral_surface)
+                    powerButton.background = circleRipple(R.color.surface)
+                    powerIcon.imageTintList = ui.colorList(R.color.muted)
+                    powerButton.contentDescription = "自动转发已暂停，点按开启转发"
+                }
+            }
+        }
+
+        stateTitle.showText(when {
+            configResult.isFailure -> "转发配置异常"
+            !ready -> "完成准备后开启"
+            enabled -> "转发运行中"
+            else -> "轻点开启转发"
+        })
         stateDetail.showText(when {
-            !configured -> "先配置飞书机器人，再开启自动转发。"
-            !permission -> "授权接收短信后，才能自动转发新短信。"
-            filter.isFailure -> "短信筛选设置异常，请重新保存后再转发。"
-            enabled && filter.getOrNull()?.enabled == true -> "按你选定的范围转发新短信。"
-            enabled -> "新短信将自动发送到你的飞书群。"
-            else -> "开启后自动转发，暂停期间的新短信不补发。"
+            configResult.isFailure -> "请检查「转发目的地」和「转发规则」并重新保存"
+            !permission -> "请先完成下方权限与规则准备"
+            !hasDest -> "请先添加至少一个转发目的地"
+            !hasActiveRoute -> "请启用至少一条转发规则"
+            enabled -> "已启用 ${config!!.enabledRules().size} 条规则 · 收到新短信自动送达"
+            else -> "已暂停 · 暂停期间的新短信不会补发"
         })
-        filterSummary.showText(runCatching { FilterSettings.summary(this) }.getOrDefault("短信筛选设置异常，请重新设置并保存"))
-        queueValue.showText("$count 条")
-        permissionValue.showText(if (permission) "已授权" else "未授权")
-        permissionValue.setTextColor(ui.color(if (permission) R.color.success else R.color.danger))
-        permissionButton.visibility = if (permission) View.GONE else View.VISIBLE
-        configSummary.showText(if (configured) "机器人已配置 · 地址已隐藏" else "尚未配置接收群")
-        configButton.text = when { configExpanded -> "收起"; enabled -> "暂停编辑"; else -> "编辑" }
-        configHint.showText(when {
-            enabled -> "修改配置前，请先关闭上方的自动转发。"
-            count > 0 -> "请先清空待发队列，再修改接收群。"
-            else -> "修改后保存配置，再开启自动转发。机器人关键词可设为“短信转发”。"
-        })
-        ui.enabled(saveButton, !enabled && count == 0)
-        ui.enabled(webhook, !enabled)
-        ui.enabled(secret, !enabled)
-        ui.enabled(testButton, enabled && configured)
-        ui.enabled(retryButton, enabled && count > 0)
-        ui.enabled(clearButton, !enabled && count > 0)
-        queueHint.showText(when {
-            count == 0 -> "暂无待发消息。断网时会暂存，恢复网络后自动重试。"
-            enabled -> "$count 条消息等待发送。连续失败 8 次后，可在此手动重试。"
-            else -> "$count 条消息已暂停发送。开启转发可继续，也可以清空。"
-        })
+
+        testChip.visibility = if (enabled && hasDest) View.VISIBLE else View.GONE
+
+        setupSection.visibility = if (ready || configResult.isFailure) View.GONE else View.VISIBLE
+        ui.setValueText(stepPermValue, if (permission) "已授权" else "去授权", if (permission) R.color.subtle else R.color.danger)
+        ui.setValueText(stepDestValue, if (hasDest) "已添加" else "去添加", if (hasDest) R.color.subtle else R.color.accent)
+        ui.setValueText(stepRuleValue, if (hasActiveRoute) "已启用" else "去设置", if (hasActiveRoute) R.color.subtle else R.color.accent)
+
         val message = prefs.getString("status", "").orEmpty()
-        latest.showText(message.ifBlank { "还没有转发记录，收到新短信后会在这里显示发送结果。" })
+        latest.showText(message.ifBlank { "还没有转发记录，收到新短信后会在这里显示结果。" })
         latest.setTextColor(ui.color(if (listOf("失败", "错误", "无效", "未能", "超过", "已满").any { it in message }) R.color.danger else R.color.ink))
         val time = prefs.getLong("statusTime", 0)
-        latestTime.showText(if (time == 0L) "只显示状态，不展示短信正文" else "最近更新 · " + SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(time)))
+        latestTime.showText(if (time == 0L) "不展示短信正文" else SimpleDateFormat("M月d日 HH:mm", Locale.CHINA).format(Date(time)))
+
+        queueCard.visibility = if (count > 0) View.VISIBLE else View.GONE
+        if (count > 0) {
+            ui.setValueText(queueCountText, "$count 条待发", R.color.warning, bold = true)
+            queueHint.showText(if (enabled) {
+                "网络恢复后会自动重试；连续失败 8 次后可手动重试。"
+            } else {
+                "转发已暂停。开启转发将继续发送，也可以直接清空。"
+            })
+            ui.enabled(retryButton, enabled)
+            ui.enabled(clearButton, !enabled)
+        }
+
+        if (config == null) {
+            destSummary.showText("配置异常，点击检查")
+            ui.setValueText(destValue, "异常", R.color.danger)
+        } else if (config.destinations.isEmpty()) {
+            destSummary.showText("支持飞书、企业微信、钉钉、Webhook")
+            ui.setValueText(destValue, "未添加", R.color.warning)
+        } else {
+            val platforms = config.destinations.map { it.type.displayName }.distinct().joinToString("、")
+            destSummary.showText(platforms)
+            ui.setValueText(destValue, "${config.destinations.size} 个", R.color.subtle)
+        }
+
+        if (config == null) {
+            ruleSummary.showText("配置异常，点击检查")
+            ui.setValueText(ruleValue, "异常", R.color.danger)
+        } else if (config.rules.isEmpty()) {
+            ruleSummary.showText("按验证码、号码、关键词灵活路由")
+            ui.setValueText(ruleValue, "未设置", R.color.warning)
+        } else {
+            val activeCount = config.enabledRules().size
+            ruleSummary.showText("共 ${config.rules.size} 条规则")
+            ui.setValueText(
+                ruleValue,
+                if (activeCount > 0) "$activeCount 条生效" else "均已停用",
+                if (activeCount > 0) R.color.subtle else R.color.muted
+            )
+        }
+
+        val bgRestricted = getSystemService(ActivityManager::class.java).isBackgroundRestricted
+        val batteryExempt = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+        when {
+            !permission -> {
+                permissionSummary.showText("缺少接收短信权限")
+                ui.setValueText(permissionValue, "需授权", R.color.danger)
+            }
+            bgRestricted -> {
+                permissionSummary.showText("系统限制了后台活动")
+                ui.setValueText(permissionValue, "建议调整", R.color.warning)
+            }
+            !batteryExempt -> {
+                permissionSummary.showText("电池优化可能延迟送达")
+                ui.setValueText(permissionValue, "可优化", R.color.warning)
+            }
+            else -> {
+                permissionSummary.showText("短信权限与后台运行正常")
+                ui.setValueText(permissionValue, "正常", R.color.subtle)
+            }
+        }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putBoolean("configExpanded", configExpanded)
-        super.onSaveInstanceState(outState)
-    }
     override fun onResume() { super.onResume(); handler.removeCallbacks(refresh); handler.post(refresh) }
     override fun onPause() { handler.removeCallbacks(refresh); super.onPause() }
 }

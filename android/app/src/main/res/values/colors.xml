@@ -1,15 +1,29 @@
 <resources>
-    <color name="page">#F4F6FA</color>
+    <!-- MIUI / HyperOS 风格极简纯净浅色色板 -->
+    <color name="page">#F7F7F7</color>
     <color name="surface">#FFFFFF</color>
-    <color name="ink">#17243A</color>
-    <color name="muted">#57667A</color>
-    <color name="accent">#215ED6</color>
+    <color name="neutral_surface">#F0F0F0</color>
+    <color name="ink">#1A1A1A</color>
+    <color name="muted">#666666</color>
+    <color name="subtle">#8C8C8C</color>
+    <color name="accent">#0D84FF</color>
     <color name="on_accent">#FFFFFF</color>
-    <color name="accent_surface">#EAF1FF</color>
-    <color name="line">#DFE5EF</color>
-    <color name="field">#F7F9FC</color>
-    <color name="success">#146B49</color>
-    <color name="success_surface">#E6F5ED</color>
-    <color name="danger">#B52F38</color>
-    <color name="ripple">#24215ED6</color>
+    <color name="accent_surface">#EBF4FF</color>
+    <color name="line">#EBEBEB</color>
+    <color name="card_stroke">#00000000</color>
+    <color name="field">#F5F5F5</color>
+    <color name="switch_off">#DCDCDC</color>
+    <color name="success">#24A159</color>
+    <color name="success_surface">#EDF8F1</color>
+    <color name="warning">#DF7E00</color>
+    <color name="warning_surface">#FDF4E7</color>
+    <color name="danger">#E53935</color>
+    <color name="danger_surface">#FDEEEE</color>
+    <color name="tile_blue">#0D84FF</color>
+    <color name="tile_indigo">#5856D6</color>
+    <color name="tile_green">#30B864</color>
+    <color name="tile_teal">#00A6B4</color>
+    <color name="tile_amber">#F08C00</color>
+    <color name="tile_gray">#8E8E93</color>
+    <color name="ripple">#14000000</color>
 </resources>

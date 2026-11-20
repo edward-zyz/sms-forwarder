@@ -35,4 +35,13 @@ class FilterDescriptionsTest {
         val onlyDigits = FilterDescriptions.describe(FilterRules(true, requireDigits = true, matchAll = true))
         assertTrue(onlyDigits.contains("数字")); assertFalse(onlyDigits.contains("关键词"))
     }
+
+    @Test fun threeStageTemplateRulesDescribeCodeWordRequirement() {
+        val rules = PlatformTemplates.buildRules(setOf("meituan"))
+        val description = FilterDescriptions.describe(rules)
+        assertTrue(description.contains("美团"))
+        assertTrue(description.contains("验证码字样"))
+        assertTrue(description.contains("4–6"))
+        assertTrue(description.contains("且"))
+    }
 }

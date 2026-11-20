@@ -1,10 +1,12 @@
 <resources>
     <item name="main_scroll" type="id" />
+    <item name="permissions_scroll" type="id" />
     <item name="webhook_input" type="id" />
     <item name="secret_input" type="id" />
     <item name="filter_scroll" type="id" />
     <item name="filter_enabled" type="id" />
     <item name="filter_include" type="id" />
+    <item name="filter_code_word" type="id" />
     <item name="filter_digits" type="id" />
     <item name="filter_any" type="id" />
     <item name="filter_all" type="id" />
@@ -18,4 +20,16 @@
     <item name="filter_preset_custom" type="id" />
     <item name="filter_test_button" type="id" />
     <item name="filter_save_button" type="id" />
+    <item name="rule_name_input" type="id" />
+    <item name="rule_enabled_switch" type="id" />
+    <item name="rules_scroll" type="id" />
+    <item name="destinations_scroll" type="id" />
+    <item name="dest_edit_scroll" type="id" />
+    <item name="dest_name_input" type="id" />
+    <item name="dest_type_feishu" type="id" />
+    <item name="dest_type_wecom" type="id" />
+    <item name="dest_type_dingtalk" type="id" />
+    <item name="dest_type_custom" type="id" />
+    <item name="dest_webhook_input" type="id" />
+    <item name="dest_secret_input" type="id" />
 </resources>

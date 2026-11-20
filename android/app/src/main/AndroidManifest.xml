@@ -9,6 +9,10 @@
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".FilterActivity" android:exported="false" />
+        <activity android:name=".RulesActivity" android:exported="false" />
+        <activity android:name=".DestinationsActivity" android:exported="false" />
+        <activity android:name=".DestinationEditActivity" android:exported="false" />
+        <activity android:name=".PermissionActivity" android:exported="false" />
         <receiver android:name=".SmsReceiver" android:exported="true" android:permission="android.permission.BROADCAST_SMS">
             <intent-filter><action android:name="android.provider.Telephony.SMS_RECEIVED" /></intent-filter>
         </receiver>

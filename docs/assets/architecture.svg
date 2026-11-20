@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-label="短信转飞书本地直连架构与安全边界图">
+  <defs>
+    <style>
+      .font { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif; }
+      .title { font-size: 17px; font-weight: 700; fill: #0F172A; }
+      .subtitle { font-size: 11.5px; fill: #475569; }
+      .card-title { font-size: 13.5px; font-weight: 700; fill: #0F172A; }
+      .card-sub { font-size: 11px; fill: #64748B; }
+      .sec-label { font-size: 10.5px; font-weight: 600; fill: #334155; }
+      .chip-text { font-size: 10.5px; font-weight: 500; fill: #1E293B; }
+      .small { font-size: 10.5px; fill: #475569; }
+      .tiny { font-size: 9.8px; fill: #64748B; }
+      .shield-title { font-size: 11.5px; font-weight: 700; fill: #991B1B; }
+      .shield-text { font-size: 10.5px; font-weight: 600; fill: #B91C1C; }
+      .arrow-label { font-size: 10.5px; font-weight: 600; fill: #0F766E; }
+      .arrow-sub { font-size: 9.8px; fill: #64748B; }
+      .msg-head { font-size: 11.2px; font-weight: 700; fill: #0F172A; }
+      .msg-body { font-size: 10px; fill: #334155; }
+      .msg-meta { font-size: 9.5px; fill: #64748B; }
+      .foot-text { font-size: 11px; font-weight: 600; fill: #334155; }
+    </style>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#3B82F6"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 1 1.5 L 8.5 5 L 1 8.5 z" fill="#0D9488"/>
+    </marker>
+  </defs>
+
+  <!-- 外层浅色圆角容器（确保 GitHub 深浅主题下均高对比可读） -->
+  <rect x="1" y="1" width="958" height="398" rx="16" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+
+  <!-- 顶部标题栏 -->
+  <text x="24" y="34" class="font title">短信转飞书 · 本地直连架构与安全边界</text>
+  <text x="24" y="53" class="font subtitle">你的手机直接把筛选后的验证码发往团队群机器人，全程不经过任何第三方服务器</text>
+
+  <!-- 右上角定位徽章 -->
+  <rect x="752" y="20" width="184" height="28" rx="14" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+  <circle cx="768" cy="34" r="4" fill="#10B981"/>
+  <text x="779" y="38" class="font" font-size="11" font-weight="600" fill="#065F46">单向直连 · 无后端 · 无远控</text>
+
+  <!-- ==================== 左侧卡片：收信端 ==================== -->
+  <g transform="translate(24, 72)">
+    <rect x="0" y="0" width="260" height="248" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.2"/>
+    <path d="M 12 0 H 248 A 12 12 0 0 1 260 12 V 4 H 0 V 12 A 12 12 0 0 1 12 0 Z" fill="#3B82F6"/>
+
+    <!-- 标题 -->
+    <circle cx="24" cy="28" r="10" fill="#EFF6FF"/>
+    <text x="24" y="32" text-anchor="middle" class="font" font-size="11" font-weight="700" fill="#2563EB">1</text>
+    <text x="41" y="27" class="font card-title">收信端（你的手机）</text>
+    <text x="41" y="42" class="font card-sub">旧安卓机 / iPhone 收到商家验证码</text>
+
+    <!-- 9 大平台模板区 -->
+    <rect x="12" y="54" width="236" height="106" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="22" y="71" class="font sec-label">预置 9 大高频商家模板（直接勾选）</text>
+
+    <!-- 第一行标签 -->
+    <rect x="20" y="79" width="76" height="22" rx="5" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="0.9"/>
+    <text x="58" y="94" text-anchor="middle" class="font chip-text">美团 / 开店宝</text>
+
+    <rect x="102" y="79" width="136" height="22" rx="5" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="0.9"/>
+    <text x="170" y="94" text-anchor="middle" class="font chip-text">淘宝闪购 / 饿了么</text>
+
+    <!-- 第二行标签 -->
+    <rect x="20" y="106" width="110" height="22" rx="5" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="0.9"/>
+    <text x="75" y="121" text-anchor="middle" class="font chip-text">京东到家 / 秒送</text>
+
+    <rect x="136" y="106" width="102" height="22" rx="5" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="0.9"/>
+    <text x="187" y="121" text-anchor="middle" class="font chip-text">抖音来客</text>
+
+    <!-- 第三行概括 -->
+    <rect x="20" y="133" width="218" height="20" rx="5" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="0.9"/>
+    <text x="129" y="147" text-anchor="middle" class="font tiny">淘宝 · 拼多多 · 小红书 · 微信小店 · 通用验证码</text>
+
+    <!-- 三段防误转区 -->
+    <rect x="12" y="168" width="236" height="68" rx="8" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1"/>
+    <text x="22" y="185" class="font" font-size="10.8" font-weight="700" fill="#166534">本地三段防误转过滤</text>
+    <text x="22" y="203" class="font small">平台词 + 验证码字样 + 4~6 位数字</text>
+    <text x="22" y="221" class="font tiny">默认排除银行 / 扣款 / 转账 / 退订营销短信</text>
+  </g>
+
+  <!-- 箭头 1：收信端 → 本地安全沙箱 -->
+  <g>
+    <line x1="286" y1="196" x2="324" y2="196" stroke="#3B82F6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+    <text x="306" y="184" text-anchor="middle" class="font" font-size="10" font-weight="600" fill="#2563EB">新短信</text>
+    <text x="306" y="212" text-anchor="middle" class="font arrow-sub">广播</text>
+  </g>
+
+  <!-- ==================== 中间卡片：本地安全沙箱 ==================== -->
+  <g transform="translate(332, 72)">
+    <rect x="0" y="0" width="286" height="248" rx="12" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" stroke-dasharray="6 3"/>
+    <path d="M 12 0 H 274 A 12 12 0 0 1 286 12 V 4 H 0 V 12 A 12 12 0 0 1 12 0 Z" fill="#0D9488"/>
+
+    <!-- 标题 -->
+    <circle cx="24" cy="28" r="10" fill="#CCFBF1"/>
+    <text x="24" y="32" text-anchor="middle" class="font" font-size="11" font-weight="700" fill="#0F766E">2</text>
+    <text x="41" y="27" class="font card-title">本地安全沙箱（仅本机运行）</text>
+    <text x="41" y="42" class="font card-sub">手机本地完成筛选、分流与离线重试</text>
+
+    <!-- 内部处理步骤 1 -->
+    <rect x="14" y="54" width="258" height="44" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="24" y="72" class="font sec-label">本机规则过滤与多群分流</text>
+    <text x="24" y="89" class="font tiny">按平台/业务匹配多目的地 · 同目的地自动去重</text>
+
+    <!-- 内部处理步骤 2 -->
+    <rect x="14" y="106" width="258" height="44" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="24" y="124" class="font sec-label">SQLite 离线队列与自动重试</text>
+    <text x="24" y="141" class="font tiny">断网暂存本地私有库 · 联网补发 · 确认接收即删正文</text>
+
+    <!-- 安全红盾区 -->
+    <rect x="14" y="160" width="258" height="76" rx="8" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.2"/>
+    <!-- 红盾图标 -->
+    <g transform="translate(24, 173)">
+      <path d="M 12 1 L 23 5.5 V 13.5 C 23 20 18.2 25.4 12 27.5 C 5.8 25.4 1 20 1 13.5 V 5.5 Z" fill="#DC2626"/>
+      <path d="M 8 14 L 11 17 L 16.5 11" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="56" y="182" class="font shield-title">安全边界红线（源码公开可审）</text>
+    <text x="56" y="202" class="font shield-text">0 中转服务器 · 0 第三方依赖</text>
+    <text x="56" y="220" class="font shield-text">不读历史短信 · 成功即删正文</text>
+  </g>
+
+  <!-- 箭头 2：本地安全沙箱 → 团队群接收 -->
+  <g>
+    <line x1="620" y1="196" x2="668" y2="196" stroke="#0D9488" stroke-width="2" marker-end="url(#arrow-teal)"/>
+    <text x="645" y="182" text-anchor="middle" class="font arrow-label">HTTPS</text>
+    <text x="645" y="212" text-anchor="middle" class="font arrow-sub">直连加签</text>
+  </g>
+
+  <!-- ==================== 右侧卡片：团队群接收 ==================== -->
+  <g transform="translate(676, 72)">
+    <rect x="0" y="0" width="260" height="248" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.2"/>
+    <path d="M 12 0 H 248 A 12 12 0 0 1 260 12 V 4 H 0 V 12 A 12 12 0 0 1 12 0 Z" fill="#10B981"/>
+
+    <!-- 标题 -->
+    <circle cx="24" cy="28" r="10" fill="#ECFDF5"/>
+    <text x="24" y="32" text-anchor="middle" class="font" font-size="11" font-weight="700" fill="#059669">3</text>
+    <text x="41" y="27" class="font card-title">团队群接收（HTTPS 直连）</text>
+    <text x="41" y="42" class="font card-sub">按业务分流到对应群机器人</text>
+
+    <!-- 4 通道 2x2 徽章 -->
+    <rect x="14" y="54" width="112" height="26" rx="6" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1"/>
+    <text x="70" y="71" text-anchor="middle" class="font chip-text">飞书群机器人</text>
+
+    <rect x="134" y="54" width="112" height="26" rx="6" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+    <text x="190" y="71" text-anchor="middle" class="font chip-text">企业微信群</text>
+
+    <rect x="14" y="86" width="112" height="26" rx="6" fill="#F0F9FF" stroke="#BAE6FD" stroke-width="1"/>
+    <text x="70" y="103" text-anchor="middle" class="font chip-text">钉钉群机器人</text>
+
+    <rect x="134" y="86" width="112" height="26" rx="6" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1"/>
+    <text x="190" y="103" text-anchor="middle" class="font chip-text">自定义 Webhook</text>
+
+    <!-- 首行高亮消息预览框 -->
+    <rect x="14" y="124" width="232" height="112" rx="9" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.1"/>
+    <rect x="14" y="124" width="232" height="24" rx="9" fill="#E2E8F0"/>
+    <rect x="14" y="138" width="232" height="10" fill="#E2E8F0"/>
+    <circle cx="26" cy="136" r="3.5" fill="#10B981"/>
+    <text x="36" y="140" class="font" font-size="10" font-weight="600" fill="#334155">首行高亮预览 · 弹窗一眼看码</text>
+
+    <!-- 高亮首行 -->
+    <rect x="22" y="156" width="216" height="24" rx="5" fill="#FEF3C7" stroke="#FDE68A" stroke-width="0.9"/>
+    <text x="28" y="172" class="font msg-head">短信转发｜482910（外卖运营验证码）</text>
+
+    <!-- 次行正文与末行 -->
+    <text x="24" y="198" class="font msg-body">【美团】验证码 482910，用于登录商家后台，</text>
+    <text x="24" y="212" class="font msg-body">5 分钟内有效，请勿泄露给他人。</text>
+    <text x="24" y="228" class="font msg-meta">发件人：1069xxxx ｜ 14:32:08</text>
+  </g>
+
+  <!-- ==================== 底部安全自证条 ==================== -->
+  <g transform="translate(24, 336)">
+    <rect x="0" y="0" width="912" height="44" rx="10" fill="#EEF2F6" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="22" y="26" class="font foot-text">✓ 仅 4 项最小权限（无通讯录 / 无远控）</text>
+    <text x="268" y="26" class="font foot-text">✓ 强制 HTTPS · 禁止云端备份</text>
+    <text x="480" y="26" class="font foot-text">✓ GitHub Actions 公开构建</text>
+    <text x="680" y="26" class="font foot-text">✓ SHA-256 与构建溯源可验真</text>
+  </g>
+</svg>

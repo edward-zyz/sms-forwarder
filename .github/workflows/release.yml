@@ -1,0 +1,227 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "发布标签（例如 v1.1.0；留空时仅在 tag 触发下自动读取）"
+        required: false
+        type: string
+      version_code:
+        description: "可选 Android versionCode（留空时按版本号自动计算）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: 构建并发布可验证版本
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 缓存 Gradle 依赖
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: 配置 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 运行 Android 与 iOS 全量门禁
+        run: |
+          (cd android && ./gradlew testDebugUnitTest assembleDebug lintDebug)
+          node --test ios/*.test.cjs
+
+      - name: 校验签名 Secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=()
+          [ -n "$ANDROID_KEYSTORE_BASE64" ] || missing+=("ANDROID_KEYSTORE_BASE64")
+          [ -n "$ANDROID_KEYSTORE_PASSWORD" ] || missing+=("ANDROID_KEYSTORE_PASSWORD")
+          [ -n "$ANDROID_KEY_ALIAS" ] || missing+=("ANDROID_KEY_ALIAS")
+          [ -n "$ANDROID_KEY_PASSWORD" ] || missing+=("ANDROID_KEY_PASSWORD")
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::缺少 Android Release 签名所需的 GitHub Secrets: ${missing[*]}"
+            echo "请在仓库 Settings -> Secrets and variables -> Actions 中配置以下全部 Secrets："
+            echo "  - ANDROID_KEYSTORE_BASE64   (base64 encoded release keystore)"
+            echo "  - ANDROID_KEYSTORE_PASSWORD (keystore password)"
+            echo "  - ANDROID_KEY_ALIAS         (signing key alias)"
+            echo "  - ANDROID_KEY_PASSWORD      (signing key password)"
+            echo "Missing required Android release signing secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: 解析版本标签与版本号
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            TAG_NAME="$INPUT_TAG"
+          else
+            TAG_NAME="$REF_NAME"
+          fi
+
+          if [[ "$TAG_NAME" != v* ]]; then
+            echo "::error::发布标签必须以 v 开头（例如 v1.1.0），当前值：${TAG_NAME} / Release tag must start with 'v' (e.g. v1.1.0), got: ${TAG_NAME}"
+            exit 1
+          fi
+
+          VERSION_NAME="${TAG_NAME#v}"
+
+          if [ -n "$INPUT_VERSION_CODE" ]; then
+            if [[ ! "$INPUT_VERSION_CODE" =~ ^[0-9]+$ ]]; then
+              echo "::error::version_code 必须为正整数 / version_code must be a positive integer: ${INPUT_VERSION_CODE}"
+              exit 1
+            fi
+            VERSION_CODE="$INPUT_VERSION_CODE"
+          else
+            CORE_VERSION="${VERSION_NAME%%-*}"
+            IFS='.' read -r MAJOR MINOR PATCH _ <<< "$CORE_VERSION"
+            if [[ "$MAJOR" =~ ^[0-9]+$ ]] && [[ "${MINOR:-0}" =~ ^[0-9]+$ ]] && [[ "${PATCH:-0}" =~ ^[0-9]+$ ]]; then
+              VERSION_CODE=$((10#$MAJOR * 10000 + 10#${MINOR:-0} * 100 + 10#${PATCH:-0}))
+            else
+              VERSION_CODE="${GITHUB_RUN_NUMBER:-2}"
+            fi
+          fi
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "解析完成: tag=${TAG_NAME}, versionName=${VERSION_NAME}, versionCode=${VERSION_CODE}"
+
+      - name: 解码签名证书并构建 Release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELEASE_STORE_FILE: ${{ runner.temp }}/release.keystore
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$RELEASE_STORE_FILE"
+          chmod 600 "$RELEASE_STORE_FILE"
+          (cd android && ./gradlew assembleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE")
+
+      - name: 打包发布产物并生成校验和与证书指纹
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+          VERSION_NAME: ${{ steps.meta.outputs.version_name }}
+          VERSION_CODE: ${{ steps.meta.outputs.version_code }}
+          RELEASE_STORE_FILE: ${{ runner.temp }}/release.keystore
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          mkdir -p release-assets
+          APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
+          APK_NAME="sms-forwarder-${TAG_NAME}.apk"
+          if [ ! -f "$APK_SRC" ]; then
+            echo "::error::未找到 Release APK：$APK_SRC"
+            exit 1
+          fi
+
+          cp "$APK_SRC" "release-assets/${APK_NAME}"
+          cp "$APK_SRC" "release-assets/sms-forwarder-latest.apk"
+          cp "ios/短信转飞书.js" "release-assets/短信转飞书.js"
+
+          (
+            cd release-assets
+            sha256sum "${APK_NAME}" "sms-forwarder-latest.apk" "短信转飞书.js" > SHA256SUMS.txt
+          )
+
+          CERT_SHA256="$(
+            LC_ALL=C keytool -list -v \
+              -keystore "$RELEASE_STORE_FILE" \
+              -alias "$RELEASE_KEY_ALIAS" \
+              -storepass "$RELEASE_STORE_PASSWORD" \
+              | awk '/SHA256:/ {print $2; exit}'
+          )"
+
+          if [ -z "$CERT_SHA256" ]; then
+            echo "::error::未能从 keystore 提取 SHA-256 证书指纹 / Failed to extract SHA-256 certificate fingerprint"
+            exit 1
+          fi
+
+          cat > "${RUNNER_TEMP}/release-notes.md" <<EOF
+          ## 短信转飞书 ${TAG_NAME}
+
+          - **Android 版本**：\`${VERSION_NAME}\`（\`versionCode=${VERSION_CODE}\`，\`applicationId=com.kidbuddy.smsforwarder\`）
+          - **永久最新包直链（适合生成下载二维码）**：\`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/sms-forwarder-latest.apk\`
+          - **升级安装提示**：覆盖安装请使用 \`adb install -r ${APK_NAME}\`，不要卸载旧版本，以免丢失本地配置与待发队列。
+          - **iPhone 脚本**：请下载附件 \`短信转飞书.js\`，并按 [HANDBOOK.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG_NAME}/HANDBOOK.md) 与 [ios/README.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG_NAME}/ios/README.md) 配置快捷指令与 Scriptable 钥匙串。
+
+          ### 产物校验和（SHA-256）
+
+          \`\`\`text
+          $(cat release-assets/SHA256SUMS.txt)
+          \`\`\`
+
+          ### Android APK 签名证书指纹（SHA-256）
+
+          \`\`\`text
+          ${CERT_SHA256}
+          \`\`\`
+
+          ### 构建溯源验证
+
+          可使用 GitHub CLI 验证本 Release APK 的构建溯源证明：
+
+          \`\`\`bash
+          gh attestation verify ${APK_NAME} --repo ${GITHUB_REPOSITORY}
+          \`\`\`
+          EOF
+
+      - name: 生成 APK 构建溯源证明
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release-assets/sms-forwarder-${{ steps.meta.outputs.tag_name }}.apk
+
+      - name: 创建 GitHub Release 并上传产物
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.tag_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            release-assets/sms-forwarder-${{ steps.meta.outputs.tag_name }}.apk
+            release-assets/sms-forwarder-latest.apk
+            release-assets/SHA256SUMS.txt
+            ios/短信转飞书.js
+
+      - name: 清理临时签名文件
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/release.keystore"

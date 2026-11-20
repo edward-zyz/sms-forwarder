@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用手册与配置排查（HANDBOOK.md）
+    url: https://github.com/edward-zyz/sms-forwarder/blob/main/HANDBOOK.md
+    about: 首次安装、飞书机器人配置、Android 权限与 iPhone 快捷指令排查请先查看使用手册
+  - name: 安全策略与漏洞私下反馈（SECURITY.md）
+    url: https://github.com/edward-zyz/sms-forwarder/security/policy
+    about: 如发现安全漏洞或隐私风险，请勿在公开 Issue 中披露，请按安全策略私下反馈
