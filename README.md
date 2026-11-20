@@ -13,25 +13,26 @@
 | 平台 | 推荐方式 | 获取与指南 | 适用场景 |
 | :--- | :--- | :--- | :--- |
 | **Android（推荐主力）** | 安装正式版 APK | [直接下载最新 APK](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-latest.apk) · [全部 Release 与校验和](https://github.com/edward-zyz/sms-forwarder/releases/latest)<br><sub>国内免梯子镜像：维护者可在发布后补充公开飞书云文档直链，下载后可与 Release 的 `SHA256SUMS.txt` 核验一致。</sub> | 旧安卓机 / 备用机 7×24 稳定收码，支持多群分流、三段防误转与离线重试 |
-| **iPhone（免装 App）** | 纯「快捷指令」自动化 | [iPhone 纯快捷指令指南](ios/shortcuts-guide.md) | 非技术运营快速上手，零第三方 App，直接对接群机器人关键词校验 |
+| **iPhone（免装 App）** | 纯「快捷指令」自动化 | [直接下载签名快捷指令](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut) · [图文指南](ios/shortcuts-guide.md) | 非技术运营快速上手，零第三方 App，导入时弹窗填飞书 Webhook 即可 |
 | **iPhone（进阶加签）** | 快捷指令 + Scriptable | [Scriptable 配置指南](ios/README.md) · [通用脚本](ios/短信转飞书.js) | 需要飞书 HMAC 签名校验与钥匙串凭证隔离时选用 |
 
 > **iPhone 使用边界**：受 iOS 系统机制限制，快捷指令方案仅处理「信息」自动化触发时传入的短信正文，无法主动监听或读取收件箱历史短信，不建议作为 7×24 小时无人值守接码机。
 
-### 扫码下载 Android 最新正式版
+### 扫码安装最新版（Android & iPhone）
 
 <table>
   <tr>
-    <td align="center">
-      <img src="docs/assets/qr-android-latest.svg" width="168" alt="Android 最新正式版 APK 下载二维码" />
+    <td align="center" width="50%">
+      <strong>Android 正式版 APK</strong><br /><br />
+      <img src="docs/assets/qr-android-latest.svg" width="168" alt="Android 最新正式版 APK 下载二维码" /><br />
+      <sub>永久指向最新 Release · 覆盖升级不丢配置</sub><br />
+      <sub>推荐用相机/系统浏览器扫码；微信扫码请点右上角 <code>···</code> → 在浏览器中打开</sub>
     </td>
-    <td>
-      <strong>永久有效，发新版自动指向最新 Release</strong><br /><br />
-      <ul>
-        <li>推荐使用手机自带相机或系统浏览器扫码直接下载安装</li>
-        <li>微信内扫码若被拦截，请点右上角 <code>···</code> → <strong>在浏览器中打开</strong></li>
-        <li>覆盖升级保留已有规则、目的地配置与待发队列，无需卸载旧版</li>
-      </ul>
+    <td align="center" width="50%">
+      <strong>iPhone 纯快捷指令（免装 App）</strong><br /><br />
+      <img src="docs/assets/qr-ios-latest.svg" width="168" alt="iPhone 纯快捷指令一键导入二维码" /><br />
+      <sub>已通过 Apple 官方 <code>shortcuts sign</code> 签名 · <a href="ios/build-shortcut.py">构建源码可审计</a></sub><br />
+      <sub>iPhone 相机扫码 → Safari 打开直接导入并填飞书 Webhook → 按<a href="ios/shortcuts-guide.md">指南</a>新建「信息」自动化</sub>
     </td>
   </tr>
 </table>

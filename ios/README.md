@@ -6,7 +6,7 @@
 
 | 对比维度 | 纯快捷指令版（标准版 / 推荐运营与商家） | Scriptable 版（安全增强版 / 推荐开发者与合规团队） |
 | --- | --- | --- |
-| **配置指南** | [纯快捷指令版配置指南](shortcuts-guide.md) | [使用手册 iPhone 章节](../HANDBOOK.md#3-iphone-安装与验证) + [短信转飞书.js](短信转飞书.js) |
+| **配置指南** | [一键导入签名快捷指令](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut) · [纯快捷指令版指南](shortcuts-guide.md) | [使用手册 iPhone 章节](../HANDBOOK.md#3-iphone-安装与验证) + [短信转飞书.js](短信转飞书.js) |
 | **需要安装的 App** | **零额外 App**（仅用系统自带「快捷指令」） | 需从 App Store 安装 [Scriptable](https://apps.apple.com/cn/app/scriptable/id1405459188) |
 | **上手门槛** | **低**（按步骤搭 3 个动作，或导入签名 `.shortcut` 离线包） | **中**（安装 App → 导入 JS 脚本 → 运行写入钥匙串 → 建自动化） |
 | **飞书安全校验** | 仅支持**自定义关键词校验**（如 `短信转发`） | 同时支持**自定义关键词**与 **HMAC-SHA256 签名校验** |

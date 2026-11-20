@@ -17,7 +17,21 @@
 
 ---
 
-## 2. 新建转发快捷指令（两层原生词典方案）
+## 2. 一键导入「短信转飞书」快捷指令（推荐）
+
+本项目已提供通过 Apple 官方 `shortcuts sign --mode anyone` 签名的现成快捷指令包，无需手动搭建动作，导入时系统会自动弹窗提示填入飞书 Webhook（构建源码见 [build-shortcut.py](build-shortcut.py)，仅含构造词典与 POST 请求 2 个动作，完全透明可审计）：
+
+- **直接下载 / 导入链接**：[sms-forwarder-ios.shortcut（最新版）](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut)
+- **扫码导入**：用 iPhone 自带相机扫描 [README 首页二维码](../README.md#扫码安装最新版android--iphone)，Safari 打开后自动唤起「快捷指令」App。
+
+导入步骤：
+1. 在弹出的快捷指令预览页点 **设置快捷指令**。
+2. 粘贴第 1 步复制的飞书机器人 **Webhook 地址**，点 **添加快捷指令**。
+3. 导入完成后，直接跳到第 3 节新建「信息」自动化即可。
+
+---
+
+## 2B. 手动从零搭建（可选，供参考或自建）
 
 > **为什么要使用「两层词典 + 请求体选文件」？**  
 > 如果用「文本」动作手拼 JSON 字符串，短信里一旦包含换行符、双引号 `"` 或反斜杠 `\`，请求体就会变成非法 JSON 导致发送失败；而在部分 iOS 版本中，直接在「请求体：JSON」里嵌套词典又容易出现二次转义。使用**两层原生「词典」+「请求体：文件」**，可以由 iOS 系统底层自动完成全部字符转义，最稳定。
