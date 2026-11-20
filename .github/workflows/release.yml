@@ -155,11 +155,12 @@ jobs:
           fi
 
           cp "$APK_SRC" "release-assets/${APK_NAME}"
+          cp "$APK_SRC" "release-assets/sms-forwarder-latest.apk"
           cp "ios/短信转飞书.js" "release-assets/短信转飞书.js"
 
           (
             cd release-assets
-            sha256sum "${APK_NAME}" "短信转飞书.js" > SHA256SUMS.txt
+            sha256sum "${APK_NAME}" "sms-forwarder-latest.apk" "短信转飞书.js" > SHA256SUMS.txt
           )
 
           CERT_SHA256="$(
@@ -179,6 +180,7 @@ jobs:
           ## 短信转飞书 ${TAG_NAME}
 
           - **Android 版本**：\`${VERSION_NAME}\`（\`versionCode=${VERSION_CODE}\`，\`applicationId=com.kidbuddy.smsforwarder\`）
+          - **永久最新包直链（适合生成下载二维码）**：\`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/sms-forwarder-latest.apk\`
           - **升级安装提示**：覆盖安装请使用 \`adb install -r ${APK_NAME}\`，不要卸载旧版本，以免丢失本地配置与待发队列。
           - **iPhone 脚本**：请下载附件 \`短信转飞书.js\`，并按 [HANDBOOK.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG_NAME}/HANDBOOK.md) 与 [ios/README.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG_NAME}/ios/README.md) 配置快捷指令与 Scriptable 钥匙串。
 
@@ -216,6 +218,7 @@ jobs:
           body_path: ${{ runner.temp }}/release-notes.md
           files: |
             release-assets/sms-forwarder-${{ steps.meta.outputs.tag_name }}.apk
+            release-assets/sms-forwarder-latest.apk
             release-assets/SHA256SUMS.txt
             ios/短信转飞书.js
 

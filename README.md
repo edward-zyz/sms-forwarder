@@ -12,7 +12,7 @@
 
 | 平台 | 推荐方式 | 获取与指南 | 适用场景 |
 | :--- | :--- | :--- | :--- |
-| **Android（推荐主力）** | 安装正式版 APK | [GitHub Releases 最新版](https://github.com/edward-zyz/sms-forwarder/releases/latest)<br><sub>国内免梯子镜像：维护者可在发布后补充公开飞书云文档直链，下载后可与 Release 的 `SHA256SUMS.txt` 核验一致。</sub> | 旧安卓机 / 备用机 7×24 稳定收码，支持多群分流、三段防误转与离线重试 |
+| **Android（推荐主力）** | 安装正式版 APK | [直接下载最新 APK](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-latest.apk) · [全部 Release 与校验和](https://github.com/edward-zyz/sms-forwarder/releases/latest)<br><sub>国内免梯子镜像：维护者可在发布后补充公开飞书云文档直链，下载后可与 Release 的 `SHA256SUMS.txt` 核验一致。</sub> | 旧安卓机 / 备用机 7×24 稳定收码，支持多群分流、三段防误转与离线重试 |
 | **iPhone（免装 App）** | 纯「快捷指令」自动化 | [iPhone 纯快捷指令指南](ios/shortcuts-guide.md) | 非技术运营快速上手，零第三方 App，直接对接群机器人关键词校验 |
 | **iPhone（进阶加签）** | 快捷指令 + Scriptable | [Scriptable 配置指南](ios/README.md) · [通用脚本](ios/短信转飞书.js) | 需要飞书 HMAC 签名校验与钥匙串凭证隔离时选用 |
 
@@ -30,6 +30,15 @@
 | **不读历史短信** | 仅监听系统 `SMS_RECEIVED` 新短信广播，不查询系统短信数据库；老短信不会进入应用。 | 查看 [`AndroidManifest.xml`](android/app/src/main/AndroidManifest.xml) |
 | **发送成功即删正文** | 断网时暂存应用私有 SQLite 队列并禁用系统云备份（`allowBackup="false"`）；通道返回成功确认后立即删除本地短信正文，不保留明文历史记录。 | 查看 [`docs/architecture.md`](docs/architecture.md) |
 | **公开构建与溯源校验** | 正式版 APK 由 GitHub Actions 公开构建并随 Release 附带 `SHA256SUMS.txt`、签名证书指纹与 Artifact Attestation 构建溯源证明，可验证二进制确实来自对应源码提交。 | `gh attestation verify <apk> --repo edward-zyz/sms-forwarder` |
+
+### 与常见方案的定位差异
+
+| 对比维度 | 云端接码 / 收费代收 | 大而全通用转发器 | 本项目（极简验证码转发） |
+| :--- | :--- | :--- | :--- |
+| **数据链路** | 经过第三方云端服务器，存在泄露与风控风险 | 本机发送，但通常附带多通道与远控模块 | **纯本机 HTTPS 直连你的群机器人，不经任何中转服务器** |
+| **权限与信任面** | 需托管账号或上传短信 | 权限面广（常含读历史短信、远控、无障碍等） | **仅 4 项最小权限、0 远控、0 统计 SDK、公开构建可溯源** |
+| **配置门槛** | 按月付费或需配指纹浏览器 | 需手动写正则、通道与多步规则 | **内置 9 大商家模板直接勾选，本地「试一条短信」即验防误转** |
+| **适用人群** | 重度多店矩阵合规采购 | 需要发邮件/远控/双卡等复杂玩法的极客 | **只想安心把验证码自动转进飞书/企微/钉钉群的团队与个人** |
 
 ## 核心特性
 
