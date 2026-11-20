@@ -1,0 +1,59 @@
+name: 商家平台验证码模板建议
+description: 提交新的商家或平台验证码短信样例，用于讨论筛选规则或内置模板
+title: "[模板建议] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 脱敏提醒
+        - 请务必将短信中的真实验证码、手机号、店铺/账号标识替换为 `000000` 或 `***`。
+        - 本项目保持轻量克制，不会为单次冷门场景无限制膨胀；通用商家平台规则会优先评估。
+
+  - type: input
+    id: platform_name
+    attributes:
+      label: 平台 / 商家名称
+      description: 例如：美团商家版、饿了么零售、抖音来客、淘宝/千牛等
+      placeholder: 请填写平台名称
+    validations:
+      required: true
+
+  - type: textarea
+    id: sms_sample
+    attributes:
+      label: 脱敏后的典型验证码短信样例
+      description: 请尽量提供 1～3 条常见变体，并将数字/账号脱敏
+      placeholder: |
+        【某平台】您的登录验证码为 000000，5 分钟内有效，请勿泄露给他人。
+    validations:
+      required: true
+
+  - type: input
+    id: suggested_keywords
+    attributes:
+      label: 建议匹配的关键词或排除词（可选）
+      description: 例如：关键词「某平台、验证码」，排除词「退订、营销」
+      placeholder: 关键词 / 排除词建议
+    validations:
+      required: false
+
+  - type: dropdown
+    id: builtin_preference
+    attributes:
+      label: 是否希望内置
+      description: 请选择您期望的提供方式
+      options:
+        - 是，希望内置为默认可选模板
+        - 否，仅作为文档/自定义筛选规则示例参考
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: sanitize_confirm
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认以上短信样例已彻底脱敏，不含任何个人隐私或有效验证码
+          required: true

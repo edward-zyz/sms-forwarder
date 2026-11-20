@@ -1,0 +1,80 @@
+name: 问题反馈（Bug 报告）
+description: 反馈 Android App 或 iPhone Scriptable 脚本的异常行为与兼容问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 脱敏提醒（提交前请务必确认）
+        - **切勿**在 Issue 中粘贴真实飞书机器人 Webhook 地址、签名密钥、个人手机号、银行卡号或完整敏感验证码短信。
+        - 如需提供短信样例，请将验证码、手机号、账号等敏感信息替换为 `000000` 或 `***`。
+        - 常见安装与权限问题请先对照仓库内的 `HANDBOOK.md` 排查。
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 使用平台
+      description: 请选择遇到问题的平台
+      options:
+        - Android App
+        - iPhone（Scriptable + 快捷指令）
+        - Android 与 iPhone 均有问题
+    validations:
+      required: true
+
+  - type: input
+    id: device_os
+    attributes:
+      label: 手机品牌、型号与系统版本
+      description: 例如：小米 14 / HyperOS 2.0 / Android 15，或 iPhone 15 / iOS 18.2
+      placeholder: 手机品牌与型号 / 系统版本
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App 或脚本版本
+      description: 例如：v1.1.0、Release 标签名或具体 commit hash
+      placeholder: 例如：v1.1.0
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 系统权限与环境自查
+      description: 请勾选已完成核对的项目（尤其是国产 Android ROM 的系统限制）
+      options:
+        - label: 我已确认提交内容已完全脱敏，不包含真实 Webhook、密钥或完整敏感短信
+          required: true
+        - label: （Android）我已检查并关闭系统「验证码安全保护」或已对本应用放行
+          required: false
+        - label: （Android）我已检查「受限制的设置」、短信接收权限、后台自启动与省电策略
+          required: false
+        - label: （iPhone）我已确认快捷指令「信息」自动化设为「立即运行」，且仅依赖快捷指令传入文本
+          required: false
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 脱敏后的复现步骤与现象
+      description: 请描述操作步骤、预期结果与实际结果（请勿贴任何敏感信息）
+      placeholder: |
+        1. 配置了……（已脱敏）
+        2. 收到类似「【某平台】验证码 000000……」的短信
+        3. 预期：……
+        4. 实际：……
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra_info
+    attributes:
+      label: 补充信息（脱敏后的错误提示或筛选规则）
+      description: 可选：脱敏后的飞书返回错误码、App 内错误提示或筛选规则设置
+      placeholder: 如无补充可留空
+    validations:
+      required: false
