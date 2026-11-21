@@ -31,10 +31,11 @@ class SmsReceiver : BroadcastReceiver() {
                 val pdus = (intent.extras?.get("pdus") as? Array<*>)?.mapNotNull { it as? ByteArray } ?: return
                 val smsHash = Protocol.fingerprint(intent.getIntExtra("subscription", -1), pdus)
                 var queued = 0
+                val deviceLabel = State.deviceLabel(context)
                 Store(context).use { store ->
                     for (dispatch in decision.dispatches) {
                         val destHash = "$smsHash:${dispatch.destination.id}"
-                        val text = MessageFormatter.format(dispatch.rule.name, first.originatingAddress, time, body)
+                        val text = MessageFormatter.format(dispatch.rule.name, first.originatingAddress, time, body, deviceLabel)
                         if (store.add(text, destHash, dispatch.destination.id, dispatch.rule.name)) {
                             queued++
                         }

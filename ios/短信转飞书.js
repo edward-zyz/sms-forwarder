@@ -87,10 +87,20 @@ function readMessage(input) {
   }
   throw new Error('请将快捷指令收到的短信“内容”文本作为脚本参数传入。');
 }
-function buildPayload(message, secret, seconds) {
+function sanitizeDevicePhone(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/[\r\n]+/g, ' ').trim().slice(0, 48).trimEnd();
+}
+function buildPayload(message, secret, seconds, devicePhone) {
+  const cleanDevice = sanitizeDevicePhone(devicePhone);
   const payload = {
     msg_type: 'text',
-    content: {text: '短信转发\n来源：iPhone' + (message.sender ? '\n发件人：'+message.sender : '') + '\n\n'+message.body}
+    content: {
+      text: '短信转发\n来源：iPhone' +
+        (cleanDevice ? '\n接收手机：' + cleanDevice : '') +
+        (message.sender ? '\n发件人：' + message.sender : '') +
+        '\n\n' + message.body
+    }
   };
   if (secret) {
     payload.timestamp = String(seconds);
@@ -102,15 +112,16 @@ function buildPayload(message, secret, seconds) {
 async function configure() {
   const alert = new Alert();
   alert.title = '短信转飞书';
-  alert.message = '转发快捷指令传入的所有非空短信。填写飞书机器人地址和签名密钥，保存在 Scriptable 钥匙串；本次只保存配置。';
+  alert.message = '转发快捷指令传入的所有非空短信。填写飞书机器人地址、可选签名密钥及本机号码/备注，保存在 Scriptable 钥匙串；本次只保存配置。';
   alert.addTextField('飞书机器人 Webhook');
   alert.addSecureTextField('签名密钥（机器人未启用签名时留空）');
+  alert.addTextField('本机号码或备注（选填，多机转同一群时区分来源）');
   alert.addAction('保存');
   alert.addCancelAction('取消');
   if (await alert.presentAlert() < 0) return {configured:false};
-  const webhook=alert.textFieldValue(0).trim(), secret=alert.textFieldValue(1).trim();
+  const webhook=alert.textFieldValue(0).trim(), secret=alert.textFieldValue(1).trim(), devicePhone=sanitizeDevicePhone(alert.textFieldValue(2));
   if (!validWebhook(webhook)) throw new Error('飞书机器人地址格式不正确，未保存。');
-  Keychain.set(CONFIG_KEY, JSON.stringify({webhook,secret}));
+  Keychain.set(CONFIG_KEY, JSON.stringify({webhook,secret,devicePhone}));
   return {configured:true};
 }
 async function main() {
@@ -126,7 +137,7 @@ async function main() {
   let saved;
   try { saved=JSON.parse(Keychain.get(CONFIG_KEY)); } catch (_) { throw new Error('飞书配置不可用，请在 Scriptable 中重新配置。'); }
   if (!saved || !validWebhook(saved.webhook) || typeof saved.secret !== 'string') throw new Error('飞书配置无效，请重新配置。');
-  const payload=buildPayload(message,saved.secret,Math.floor(Date.now()/1000));
+  const payload=buildPayload(message,saved.secret,Math.floor(Date.now()/1000),saved.devicePhone);
   const body=JSON.stringify(payload);
   if (utf8(body).length > 20000) throw new Error('消息超过飞书20KB限制，未转发。');
   const request = new Request(saved.webhook);

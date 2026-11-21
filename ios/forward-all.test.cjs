@@ -42,6 +42,13 @@ test('optional sender is preserved',async()=>{
   await lib.main();
   assert.equal(JSON.parse(calls[0].body).content.text,'短信转发\n来源：iPhone\n发件人：106000\n\n短信正文');
 });
+test('optional devicePhone is sanitized and included when configured',async()=>{
+  const {lib,calls}=await runtime({body:'验证码 482910',sender:'106900'},{
+    saved:JSON.stringify({webhook:endpoint,secret:'test-secret',devicePhone:' 浦东店\n138****8888 '})
+  });
+  await lib.main();
+  assert.equal(JSON.parse(calls[0].body).content.text,'短信转发\n来源：iPhone\n接收手机：浦东店 138****8888\n发件人：106900\n\n验证码 482910');
+});
 test('blank text skips and missing or invalid input cannot send',async()=>{
   for(const input of ['  \n',{body:''}]) {
     const {lib,calls}=await runtime(input);
@@ -78,11 +85,11 @@ test('running inside Scriptable without input only saves configuration',async()=
   class Alert {
     addTextField() {} addSecureTextField() {} addAction() {} addCancelAction() {}
     async presentAlert() {return 0;}
-    textFieldValue(index) {return index===0 ? endpoint : 'test-secret';}
+    textFieldValue(index) {return [endpoint,'test-secret',' 138****8888 '][index] || '';}
   }
   const lib=await factory({}, {runsInApp:true}, {set:(key,value)=>{saved={key,value};}},
     class Request {constructor(){throw new Error('configuration must not send');}}, Alert, undefined);
   assert.deepEqual(await lib.main(),{configured:true});
   assert.equal(saved.key,'sms-forwarder.feishu.v1');
-  assert.deepEqual(JSON.parse(saved.value),{webhook:endpoint,secret:'test-secret'});
+  assert.deepEqual(JSON.parse(saved.value),{webhook:endpoint,secret:'test-secret',devicePhone:'138****8888'});
 });

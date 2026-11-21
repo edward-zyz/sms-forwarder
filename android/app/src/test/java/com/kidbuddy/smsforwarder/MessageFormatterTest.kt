@@ -53,4 +53,36 @@ class MessageFormatterTest {
             formatted,
         )
     }
+
+    @Test fun includesDeviceLabelWhenConfiguredAndOmitsWhenBlank() {
+        val withLabel = MessageFormatter.format(
+            ruleName = "外卖运营群",
+            sender = "10690001",
+            time = "2026-11-21 12:00:00",
+            body = "【美团】验证码 482910",
+            deviceLabel = "138****8888",
+        )
+        assertEquals(
+            "短信转发｜482910（外卖运营群）\n接收手机：138****8888\n【美团】验证码 482910\n发件人：10690001 ｜ 2026-11-21 12:00:00",
+            withLabel,
+        )
+
+        val blankLabel = MessageFormatter.format(
+            ruleName = "外卖运营群",
+            sender = "10690001",
+            time = "2026-11-21 12:00:00",
+            body = "【美团】验证码 482910",
+            deviceLabel = "   \n  ",
+        )
+        assertEquals(
+            "短信转发｜482910（外卖运营群）\n【美团】验证码 482910\n发件人：10690001 ｜ 2026-11-21 12:00:00",
+            blankLabel,
+        )
+    }
+
+    @Test fun sanitizesDeviceLabelNewlinesAndMaxLength() {
+        assertEquals("浦东店 138****8888", MessageFormatter.sanitizeDeviceLabel("  浦东店\n138****8888\r\n "))
+        val longText = "A".repeat(80)
+        assertEquals(MessageFormatter.MAX_DEVICE_LABEL_LENGTH, MessageFormatter.sanitizeDeviceLabel(longText).length)
+    }
 }

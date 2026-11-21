@@ -85,6 +85,11 @@ object State {
     val gate = Any()
     fun prefs(context: Context) = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
     fun enabled(context: Context) = prefs(context).getBoolean("enabled", false)
+    fun deviceLabel(context: Context): String = MessageFormatter.sanitizeDeviceLabel(prefs(context).getString("deviceLabel", ""))
+    fun setDeviceLabel(context: Context, value: String): Boolean {
+        val clean = MessageFormatter.sanitizeDeviceLabel(value)
+        return prefs(context).edit().putString("deviceLabel", clean).commit()
+    }
     fun status(context: Context, message: String) {
         prefs(context).edit().putString("status", message).putLong("statusTime", System.currentTimeMillis()).apply()
     }

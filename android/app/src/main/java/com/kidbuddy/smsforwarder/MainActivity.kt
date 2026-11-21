@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ruleValue: TextView
     private lateinit var permissionSummary: TextView
     private lateinit var permissionValue: TextView
+    private lateinit var deviceSummary: TextView
+    private lateinit var deviceValue: TextView
     private var heroStateCache = ""
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
@@ -249,11 +251,19 @@ class MainActivity : AppCompatActivity() {
             addView(settingEntry(R.drawable.ic_shield, R.color.tile_green, "权限与后台保活", permissionSummary, trailingValue(permissionValue)) {
                 openPermissions()
             })
+
+            ui.insetDivider(this, startDp = 62, endDp = 18)
+
+            deviceSummary = ui.text("", 12.5f, R.color.subtle)
+            deviceValue = ui.valueText()
+            addView(settingEntry(R.drawable.ic_phone, R.color.tile_teal, "本机号码 / 备注", deviceSummary, trailingValue(deviceValue)) {
+                editDeviceLabel()
+            })
         })
 
         // 页脚安全与隐私说明（面向普通用户的大白话）
         content.addView(ui.text(
-            "只发给你指定的群 · 不翻看旧短信 · 不留存内容",
+            "只发给你指定的目的地 · 不翻看旧短信 · 不留存内容",
             12f, R.color.subtle
         ).apply {
             gravity = Gravity.CENTER
@@ -385,7 +395,9 @@ class MainActivity : AppCompatActivity() {
                 try {
                     synchronized(State.gate) {
                         if (!State.enabled(this)) { toast("转发已暂停"); return@setPositiveButton }
-                        val text = "短信转发\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
+                        val deviceLabel = State.deviceLabel(this)
+                        val deviceLine = if (deviceLabel.isNotEmpty()) "\n接收手机：$deviceLabel" else ""
+                        val text = "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
                         Store(this).use { it.add(text, null, dest.id, "测试消息") }
                         State.status(this, "测试消息已入队，等待「${dest.name}」确认")
                         ForwardJob.schedule(this)
@@ -418,6 +430,42 @@ class MainActivity : AppCompatActivity() {
                 }
                 renderStatus()
             }.setNegativeButton("取消", null).show()
+    }
+
+    private fun editDeviceLabel() {
+        val current = State.deviceLabel(this)
+        val (fieldLayout, input) = ui.textField(
+            label = "本机号码或门店备注",
+            placeholder = "例如 138****8888 或 浦东店·美团号",
+            value = current,
+            helper = "选填（最多 ${MessageFormatter.MAX_DEVICE_LABEL_LENGTH} 字）。多台手机转同一个群时，消息中会附带「接收手机」，不申请额外电话权限。"
+        )
+        val container = ui.column().apply {
+            setPadding(ui.dp(22), ui.dp(12), ui.dp(22), 0)
+            addView(fieldLayout)
+        }
+        val builder = ui.dialog()
+            .setTitle("本机号码 / 备注")
+            .setView(container)
+            .setPositiveButton("保存") { _, _ ->
+                val raw = input.text?.toString().orEmpty()
+                if (State.setDeviceLabel(this, raw)) {
+                    val saved = State.deviceLabel(this)
+                    toast(if (saved.isEmpty()) "已清空本机号码/备注" else "已保存：$saved")
+                } else {
+                    toast("保存失败，请重试")
+                }
+                renderStatus()
+            }
+            .setNegativeButton("取消", null)
+        if (current.isNotEmpty()) {
+            builder.setNeutralButton("清空") { _, _ ->
+                if (State.setDeviceLabel(this, "")) toast("已清空本机号码/备注")
+                else toast("清空失败，请重试")
+                renderStatus()
+            }
+        }
+        builder.show()
     }
 
     private fun openPermissions() { startActivity(Intent(this, PermissionActivity::class.java)) }
@@ -555,6 +603,15 @@ class MainActivity : AppCompatActivity() {
                 permissionSummary.showText("短信权限与后台运行正常")
                 ui.setValueText(permissionValue, "正常", R.color.subtle)
             }
+        }
+
+        val deviceLabel = State.deviceLabel(this)
+        if (deviceLabel.isEmpty()) {
+            deviceSummary.showText("多台手机转同一个群时，用来区分来源")
+            ui.setValueText(deviceValue, "未填写", R.color.muted)
+        } else {
+            deviceSummary.showText("转发时附带：$deviceLabel")
+            ui.setValueText(deviceValue, "已填写", R.color.subtle)
         }
     }
 

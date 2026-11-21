@@ -3,13 +3,15 @@
 
 用法：
     python3 ios/build-shortcut.py /tmp/sms-forwarder-ios.unsigned.shortcut
-    shortcuts sign --mode anyone -i /tmp/sms-forwarder-ios.unsigned.shortcut -o ios/sms-forwarder-ios.shortcut
+    shortcuts sign --mode anyone -i /tmp/sms-forwarder-ios.unsigned.shortcut -o /tmp/sms-forwarder-ios.shortcut
+    cp /tmp/sms-forwarder-ios.shortcut ios/sms-forwarder-ios.shortcut
 """
 
 import plistlib
 import sys
 from pathlib import Path
 
+DEVICE_ACTION_UUID = "6F3E9C10-5B2A-4D7E-9A11-000000000000"
 DICT_ACTION_UUID = "6F3E9C10-5B2A-4D7E-9A11-000000000001"
 HTTP_ACTION_UUID = "6F3E9C10-5B2A-4D7E-9A11-000000000002"
 
@@ -22,13 +24,23 @@ def text_token(value: str) -> dict:
 
 
 def build_shortcut() -> dict:
-    # "短信转发\n" 为 5 个 UTF-16 码元，后接对象替换字符 \ufffc 引用快捷指令输入（短信正文）
+    # 索引核对（UTF-16 码元）：
+    # 0..4: "短信转发\n" (5)
+    # 5..9: "接收手机：" (5)
+    # 10:   \ufffc -> 本机号码/备注（Action 0 输出）
+    # 11:   "\n"
+    # 12:   \ufffc -> 快捷指令输入（短信正文）
     sms_text_value = {
         "Value": {
             "attachmentsByRange": {
-                "{5, 1}": {"Type": "ExtensionInput"},
+                "{10, 1}": {
+                    "OutputName": "文本",
+                    "OutputUUID": DEVICE_ACTION_UUID,
+                    "Type": "ActionOutput",
+                },
+                "{12, 1}": {"Type": "ExtensionInput"},
             },
-            "string": "短信转发\n\ufffc",
+            "string": "短信转发\n接收手机：\ufffc\n\ufffc",
         },
         "WFSerializationType": "WFTextTokenString",
     }
@@ -71,6 +83,13 @@ def build_shortcut() -> dict:
     ]
 
     actions = [
+        {
+            "WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
+            "WFWorkflowActionParameters": {
+                "UUID": DEVICE_ACTION_UUID,
+                "WFTextActionText": "iPhone",
+            },
+        },
         {
             "WFWorkflowActionIdentifier": "is.workflow.actions.dictionary",
             "WFWorkflowActionParameters": {
@@ -120,12 +139,19 @@ def build_shortcut() -> dict:
         },
         "WFWorkflowImportQuestions": [
             {
-                "ActionIndex": 1,
+                "ActionIndex": 2,
                 "Category": "Parameter",
                 "DefaultValue": "https://open.feishu.cn/open-apis/bot/v2/hook/",
                 "ParameterKey": "WFURL",
                 "Text": "请粘贴你的飞书群机器人 Webhook 地址（需在飞书群机器人安全设置中勾选自定义关键词“短信转发”）：",
-            }
+            },
+            {
+                "ActionIndex": 0,
+                "Category": "Parameter",
+                "DefaultValue": "iPhone",
+                "ParameterKey": "WFTextActionText",
+                "Text": "本机号码或门店备注（例如 138****8888 或 浦东店·美团号，多台手机转发到同一群时用于区分来源）：",
+            },
         ],
         "WFWorkflowInputContentItemClasses": [
             "WFStringContentItem",
