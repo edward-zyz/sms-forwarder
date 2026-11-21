@@ -36,4 +36,18 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 将本机环境脚本、个人资料及专用脚本放入根目录下的 `private/`。该目录、`local.properties` 和本机构建产物均由 Git 忽略。手机上的 Webhook 和密钥通过各端设置界面保存。
 
-Android 单元测试覆盖签名、筛选规则和表单。Node 测试覆盖 iPhone 的输入、签名、配置、请求大小和错误回执。测试使用模拟请求。真机验证按[使用手册](../HANDBOOK.md)进行。
+Android 单元测试覆盖签名、筛选规则、多规则路由、消息排版和表单。Node 测试覆盖 iPhone 的输入、签名、配置、请求大小和错误回执。测试使用模拟请求。真机验证按[使用手册](../HANDBOOK.md)进行。
+
+## iPhone 签名快捷指令
+
+纯快捷指令版的安装包 `ios/sms-forwarder-ios.shortcut` 由 `ios/build-shortcut.py` 生成，需在 macOS 上签名：
+
+```bash
+python3 ios/build-shortcut.py /tmp/sms-forwarder-ios.unsigned.shortcut
+shortcuts sign --mode anyone -i /tmp/sms-forwarder-ios.unsigned.shortcut -o /tmp/sms-forwarder-ios.shortcut
+cp /tmp/sms-forwarder-ios.shortcut ios/sms-forwarder-ios.shortcut
+```
+
+## 发布
+
+推送 `v*` 标签后，`.github/workflows/release.yml` 会运行双端门禁、用仓库 Secrets 中的 keystore 签名构建 Release APK，并发布版本号 APK、`sms-forwarder-latest.apk`、`sms-forwarder-ios.shortcut`、`sms-forwarder-ios.js` 与 `SHA256SUMS.txt`，同时生成 APK 构建溯源证明。README 中的二维码指向 `releases/latest/download/` 下的固定文件名，无需随版本更新。
