@@ -120,6 +120,10 @@ iPhone 提供两条官方路线，请按团队需求二选一（详细对比见 
 - **路线 A：纯快捷指令版（推荐绝大多数运营与商家）**：免装任何第三方 App，仅用飞书关键词校验。扫码导入项目提供的已签名快捷指令，按提示填入 Webhook 与本机号码/备注，再手动建一条「信息」自动化即可 → 请直接阅读 **[iPhone 纯快捷指令版配置指南](ios/shortcuts-guide.md)**。
 - **路线 B：Scriptable 安全增强版（推荐开发者与合规团队）**：支持飞书 HMAC-SHA256 签名校验、钥匙串密钥隔离与严格回执检查 → 请按下方步骤配置。
 
+![iPhone 信息自动化正确配置示意](docs/assets/ios-automation-setup.png)
+
+![iPhone 配置最容易踩的 2 个卡点](docs/assets/ios-automation-pitfalls.png)
+
 > **iOS 共同边界**：无论哪条路线，iPhone 都只能处理「信息」自动化触发后传入的文本，无法主动监听所有短信，也没有离线队列与自动重试。**不建议拿 iPhone 作为 7×24 无人值守接码机**。
 
 ### 安装 Scriptable 脚本并配置飞书（路线 B）
