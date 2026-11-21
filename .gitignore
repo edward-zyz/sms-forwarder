@@ -15,3 +15,9 @@
 *.keystore
 **/keystore.properties
 **/signing.properties
+
+# Python 缓存
+__pycache__/
+
+# 本地视频生成工程（成片已上传至 GitHub，README 直接引用）
+/media/

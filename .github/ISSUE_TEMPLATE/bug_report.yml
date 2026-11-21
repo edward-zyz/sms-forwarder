@@ -1,5 +1,5 @@
 name: 问题反馈（Bug 报告）
-description: 反馈 Android App 或 iPhone Scriptable 脚本的异常行为与兼容问题
+description: 反馈 Android App、iPhone 快捷指令或 Scriptable 脚本的异常行为与兼容问题
 title: "[Bug] "
 labels:
   - bug
@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         ### 脱敏提醒（提交前请务必确认）
-        - **切勿**在 Issue 中粘贴真实飞书机器人 Webhook 地址、签名密钥、个人手机号、银行卡号或完整敏感验证码短信。
+        - **切勿**在 Issue 中粘贴真实群机器人 Webhook 地址、签名密钥、个人手机号、银行卡号或完整敏感验证码短信。
         - 如需提供短信样例，请将验证码、手机号、账号等敏感信息替换为 `000000` 或 `***`。
         - 常见安装与权限问题请先对照仓库内的 `HANDBOOK.md` 排查。
 
@@ -19,6 +19,7 @@ body:
       description: 请选择遇到问题的平台
       options:
         - Android App
+        - iPhone（纯快捷指令）
         - iPhone（Scriptable + 快捷指令）
         - Android 与 iPhone 均有问题
     validations:
@@ -37,7 +38,7 @@ body:
     id: app_version
     attributes:
       label: App 或脚本版本
-      description: 例如：v1.1.0、Release 标签名或具体 commit hash
+      description: Android 版本号可在系统「应用信息」查看；也可填 Release 标签名或 commit hash
       placeholder: 例如：v1.1.0
     validations:
       required: true
@@ -74,7 +75,7 @@ body:
     id: extra_info
     attributes:
       label: 补充信息（脱敏后的错误提示或筛选规则）
-      description: 可选：脱敏后的飞书返回错误码、App 内错误提示或筛选规则设置
+      description: 可选：脱敏后的群机器人返回错误码、App 内错误提示或筛选规则设置
       placeholder: 如无补充可留空
     validations:
       required: false

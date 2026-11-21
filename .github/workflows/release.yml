@@ -181,7 +181,7 @@ jobs:
           fi
 
           sed 's/^          //' > "${RUNNER_TEMP}/release-notes.md" <<EOF
-          ## 短信转飞书 ${TAG_NAME}
+          ## 短信自动转发 ${TAG_NAME}
 
           - **Android 版本**：\`${VERSION_NAME}\`（\`versionCode=${VERSION_CODE}\`，\`applicationId=com.kidbuddy.smsforwarder\`）
           - **永久最新包直链（适合生成下载二维码）**：\`https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/sms-forwarder-latest.apk\`
