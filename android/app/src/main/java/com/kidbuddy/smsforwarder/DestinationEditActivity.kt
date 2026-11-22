@@ -1,6 +1,7 @@
 package com.kidbuddy.smsforwarder
 
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.RadioGroup
@@ -8,6 +9,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -26,11 +28,15 @@ class DestinationEditActivity : AppCompatActivity() {
     private lateinit var secretLayout: TextInputLayout
     private lateinit var secretInput: TextInputEditText
     private lateinit var errorText: TextView
+    private lateinit var guideEntryRow: LinearLayout
+    private lateinit var guideSubtitleText: TextView
     private lateinit var typeButtons: List<Pair<DestinationType, MaterialRadioButton>>
 
     private var editingId: String? = null
     private var selectedType: DestinationType = DestinationType.FEISHU
     private var binding = true
+    private var guideDialog: BottomSheetDialog? = null
+    private var guideDialogType: DestinationType? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         AppAppearance.apply(this)
@@ -116,6 +122,32 @@ class DestinationEditActivity : AppCompatActivity() {
         ui.sectionTitle(content, "连接凭证", "点击输入框右侧眼睛图标可切换明文查看")
         content.addView(ui.card(padH = 16, padV = 16) {
             ui.enableMotion(this)
+            guideSubtitleText = ui.text("", 12.5f, R.color.muted)
+            guideEntryRow = ui.row().apply {
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = ui.dp(52)
+                setPadding(ui.dp(12), ui.dp(10), ui.dp(12), ui.dp(10))
+                background = ui.ripple(R.color.accent_surface, 12, R.color.accent)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    ui.haptic(this)
+                    showGuideSheet()
+                }
+                addView(ui.iconTile(R.drawable.ic_network, R.color.accent, sizeDp = 32, iconSizeDp = 17, radiusDp = 9))
+                addView(ui.column().apply {
+                    addView(ui.text("如何获取配置？", 14.5f, R.color.ink, bold = true))
+                    ui.gap(this, 2)
+                    addView(guideSubtitleText)
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(ui.text("查看配置教程", 13f, R.color.accent, bold = true).apply {
+                    setPadding(ui.dp(8), 0, 0, 0)
+                })
+                addView(ui.chevronRight(R.color.accent))
+            }
+            addView(guideEntryRow)
+            ui.gap(this, 12)
+
             val (wl, wi) = ui.textField(
                 stableId = R.id.dest_webhook_input,
                 label = "Webhook 地址 *",
@@ -146,6 +178,9 @@ class DestinationEditActivity : AppCompatActivity() {
 
         binding = false
         applyTypeUi()
+        savedInstanceState?.getString("guide_type")?.let { DestinationType.fromId(it) }?.let { type ->
+            showGuideSheet(type)
+        }
     }
 
     private fun applyTypeUi() {
@@ -154,6 +189,8 @@ class DestinationEditActivity : AppCompatActivity() {
             button.background = if (selected) ui.round(R.color.accent_surface, 12, R.color.accent)
             else ui.round(R.color.field, 12, R.color.line)
         }
+        guideSubtitleText.text = "查看「${selectedType.displayName}」群机器人与安全配置步骤"
+        guideEntryRow.contentDescription = "如何获取配置？查看${selectedType.displayName}配置教程"
         webhookLayout.placeholderText = selectedType.webhookPlaceholder
         webhookLayout.helperText = selectedType.webhookHint
         webhookLayout.error = null
@@ -161,6 +198,19 @@ class DestinationEditActivity : AppCompatActivity() {
         secretLayout.helperText = selectedType.secretHint
         secretLayout.error = null
         showError(null)
+    }
+
+    private fun showGuideSheet(initialType: DestinationType = selectedType) {
+        if (guideDialog?.isShowing == true) return
+        guideDialogType = initialType
+        guideDialog = DestinationGuideSheet.show(this, initialType) { activeType ->
+            guideDialogType = activeType
+        }.apply {
+            setOnDismissListener {
+                guideDialog = null
+                guideDialogType = null
+            }
+        }
     }
 
     private fun showError(msg: String?) {
@@ -222,6 +272,16 @@ class DestinationEditActivity : AppCompatActivity() {
         outState.putString("type", selectedType.id)
         outState.putString("webhook", webhookInput.text?.toString().orEmpty())
         outState.putString("secret", secretInput.text?.toString().orEmpty())
+        if (guideDialog?.isShowing == true) {
+            outState.putString("guide_type", (guideDialogType ?: selectedType).id)
+        }
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        guideDialog?.setOnDismissListener(null)
+        guideDialog?.dismiss()
+        guideDialog = null
+        super.onDestroy()
     }
 }
