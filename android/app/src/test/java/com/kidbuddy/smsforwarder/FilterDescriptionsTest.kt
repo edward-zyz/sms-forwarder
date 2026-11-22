@@ -44,4 +44,20 @@ class FilterDescriptionsTest {
         assertTrue(description.contains("4–6"))
         assertTrue(description.contains("且"))
     }
+
+    @Test fun summarizeForDestinationAndPlatformDescriptionsCoverModes() {
+        val dest = Destination("d1", "运营群", DestinationType.FEISHU, "https://open.feishu.cn/open-apis/bot/v2/hook/test")
+        val rules = PlatformTemplates.defaultVerificationRules()
+        val enabledSummary = FilterDescriptions.summarizeForDestination(rules, dest, ruleEnabled = true)
+        assertTrue(enabledSummary.contains("发往 飞书「运营群」"))
+        assertTrue(enabledSummary.contains("验证码字样"))
+        assertFalse(enabledSummary.contains("当前已关闭"))
+
+        val disabledSummary = FilterDescriptions.summarizeForDestination(rules, dest, ruleEnabled = false)
+        assertTrue(disabledSummary.contains("当前已关闭"))
+
+        assertEquals("全部验证码", FilterDescriptions.describePlatforms(setOf(PlatformTemplates.ALL_VERIFICATION_ID)))
+        assertEquals("美团、饿了么", FilterDescriptions.describePlatforms(setOf("meituan", "eleme")))
+        assertTrue(FilterDescriptions.describePlatforms(setOf("meituan", "eleme", "pdd", "xiaohongshu")).contains("等 4 个平台"))
+    }
 }

@@ -9,6 +9,7 @@ class PlatformTemplatesTest {
         assertEquals(4, PlatformTemplates.inCategory(PlatformCategory.LOCAL_LIFE).size)
         assertEquals(4, PlatformTemplates.inCategory(PlatformCategory.ECOMMERCE).size)
         assertEquals(1, PlatformTemplates.inCategory(PlatformCategory.GENERAL).size)
+        assertTrue(PlatformTemplates.ALL.all { it.shortName.isNotBlank() })
         assertEquals(
             listOf("退订", "回T", "回复T", "优惠", "满减", "银行", "扣款", "转账"),
             PlatformTemplates.DEFAULT_EXCLUDE_KEYWORDS,
@@ -63,7 +64,7 @@ class PlatformTemplatesTest {
         val afterPlatform = PlatformTemplates.toggleSelection(afterAll, "douyin_laike", checked = true)
         assertEquals(setOf("douyin_laike"), afterPlatform)
 
-        val rules = PlatformTemplates.buildRules(setOf(PlatformTemplates.ALL_VERIFICATION_ID))
+        val rules = PlatformTemplates.defaultVerificationRules()
         assertTrue(rules.includeKeywords.isEmpty())
         assertTrue(rules.requireCodeWord)
         assertTrue(rules.requireDigits)
@@ -72,7 +73,7 @@ class PlatformTemplatesTest {
         assertFalse(rules.evaluate(null, "【任意平台】恭喜获得 8888 元奖励").allowed)
     }
 
-    @Test fun detectSelectedIdsRestoresCheckboxStateFromRules() {
+    @Test fun detectSelectedIdsRestoresCheckboxStateFromRulesAndRejectsCustomMixedKeywords() {
         val multi = PlatformTemplates.buildRules(setOf("jd_daojia", "xiaohongshu", "wechat_shop"))
         assertEquals(setOf("jd_daojia", "xiaohongshu", "wechat_shop"), PlatformTemplates.detectSelectedIds(multi))
 
@@ -81,5 +82,9 @@ class PlatformTemplatesTest {
 
         // 手动关闭 requireCodeWord 后不再视为标准防误转模板勾选状态。
         assertTrue(PlatformTemplates.detectSelectedIds(multi.copy(requireCodeWord = false)).isEmpty())
+
+        // 混入了额外自定义关键词时不再视为纯平台模板，避免编辑时丢失自定义词。
+        val mixed = multi.copy(includeKeywords = multi.includeKeywords + "取餐码")
+        assertTrue(PlatformTemplates.detectSelectedIds(mixed).isEmpty())
     }
 }

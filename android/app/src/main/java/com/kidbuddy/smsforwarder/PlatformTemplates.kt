@@ -14,6 +14,7 @@ data class PlatformTemplate(
     val category: PlatformCategory,
     val keywords: List<String>,
     val isAllVerification: Boolean = false,
+    val shortName: String = name,
 )
 
 /**
@@ -47,12 +48,14 @@ object PlatformTemplates {
             name = "淘宝闪购 / 饿了么",
             category = PlatformCategory.LOCAL_LIFE,
             keywords = listOf("淘宝闪购", "饿了么", "蜂鸟"),
+            shortName = "饿了么",
         ),
         PlatformTemplate(
             id = "jd_daojia",
             name = "京东到家 / 秒送",
             category = PlatformCategory.LOCAL_LIFE,
             keywords = listOf("京东到家", "京东秒送", "达达"),
+            shortName = "京东秒送",
         ),
         PlatformTemplate(
             id = "douyin_laike",
@@ -66,12 +69,14 @@ object PlatformTemplates {
             name = "淘宝 / 天猫 / 千牛",
             category = PlatformCategory.ECOMMERCE,
             keywords = listOf("淘宝", "天猫", "千牛"),
+            shortName = "淘宝千牛",
         ),
         PlatformTemplate(
             id = "pdd",
             name = "拼多多商家",
             category = PlatformCategory.ECOMMERCE,
             keywords = listOf("拼多多"),
+            shortName = "拼多多",
         ),
         PlatformTemplate(
             id = "xiaohongshu",
@@ -84,6 +89,7 @@ object PlatformTemplates {
             name = "微信小店 / 视频号",
             category = PlatformCategory.ECOMMERCE,
             keywords = listOf("微信小店", "视频号", "微信支付商户"),
+            shortName = "微信小店",
         ),
         // 通用保底
         PlatformTemplate(
@@ -135,6 +141,10 @@ object PlatformTemplates {
         )
     }
 
+    /** 生成默认「全部验证码」防误转规则，保留基础配置。 */
+    fun defaultVerificationRules(base: FilterRules = FilterRules()): FilterRules =
+        buildRules(setOf(ALL_VERIFICATION_ID), base)
+
     /** 从已有规则反推处于勾选状态的平台模板 ID，用于编辑页回显。 */
     fun detectSelectedIds(rules: FilterRules): Set<String> {
         if (!rules.enabled || !rules.requireCodeWord || !rules.requireDigits || !rules.matchAll) {
@@ -144,10 +154,10 @@ object PlatformTemplates {
             return setOf(ALL_VERIFICATION_ID)
         }
         val lowerKeywords = rules.includeKeywords.map { it.lowercase() }.toSet()
-        return ALL
+        val matched = ALL
             .filter { !it.isAllVerification && it.keywords.isNotEmpty() }
             .filter { template -> template.keywords.all { it.lowercase() in lowerKeywords } }
-            .map { it.id }
-            .toSet()
+        val coveredKeywords = matched.flatMap { it.keywords }.map { it.lowercase() }.toSet()
+        return if (coveredKeywords == lowerKeywords) matched.map { it.id }.toSet() else emptySet()
     }
 }
