@@ -52,19 +52,7 @@ class RulesActivity : AppCompatActivity() {
     }
 
     private fun openNewRule() {
-        val config = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig())
-        if (config.destinations.isEmpty()) {
-            ui.dialog()
-                .setTitle("先添加转发目的地")
-                .setMessage("创建规则前，需要先添加一个转发目的地（飞书、企业微信、钉钉或自定义 Webhook）。")
-                .setPositiveButton("去添加目的地") { _, _ ->
-                    startActivity(Intent(this, DestinationEditActivity::class.java))
-                }
-                .setNegativeButton("取消", null)
-                .show()
-            return
-        }
-        startActivity(Intent(this, FilterActivity::class.java))
+        startActivity(Intent(this, RuleWizardActivity::class.java))
     }
 
     private fun renderList() {
