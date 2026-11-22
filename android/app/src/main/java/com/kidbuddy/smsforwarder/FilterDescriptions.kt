@@ -23,8 +23,36 @@ object FilterDescriptions {
             if (rules.allowedSenders.isNotEmpty()) add("还须来自指定号码（${examples(rules.allowedSenders)}，* 表示以该号码开头）。")
         }.joinToString("")
     }
+
+    /** 组合目的地与启用状态，用于规则详情页和向导的实时效果摘要。 */
+    fun summarizeForDestination(
+        rules: FilterRules,
+        destination: Destination? = null,
+        ruleEnabled: Boolean = true,
+    ): String {
+        val destPrefix = if (destination != null) "发往 ${destination.type.displayName}「${destination.name}」：" else ""
+        val statusSuffix = if (!ruleEnabled) "（当前已关闭，不会触发转发）" else ""
+        return destPrefix + describe(rules) + statusSuffix
+    }
+
+    /** 将已选平台 ID 汇总为简洁可读的平台名称文本。 */
+    fun describePlatforms(selectedIds: Set<String>): String {
+        if (selectedIds.isEmpty() || PlatformTemplates.ALL_VERIFICATION_ID in selectedIds) {
+            return "全部验证码"
+        }
+        val names = PlatformTemplates.ALL
+            .filter { it.id in selectedIds && !it.isAllVerification }
+            .map { it.shortName }
+        return when {
+            names.isEmpty() -> "全部验证码"
+            names.size <= 3 -> names.joinToString("、")
+            else -> "${names.take(2).joinToString("、")}等 ${names.size} 个平台"
+        }
+    }
+
     private fun words(values: List<String>): String = values.take(3).joinToString("或") { "“$it”" } +
         if (values.size > 3) "等 ${values.size} 项文字中的任一种" else ""
+
     private fun examples(values: List<String>): String = values.take(3).joinToString("、") { "“$it”" } +
         if (values.size > 3) "等 ${values.size} 项" else ""
 }
