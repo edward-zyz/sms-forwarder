@@ -1,7 +1,15 @@
 // 转发快捷指令传入的非空短信正文，触发范围由快捷指令设置。
+// 支持飞书、企业微信、钉钉与自定义 HTTPS Webhook（按地址自动识别平台）。
 // 自动化的触发范围需在快捷指令中另行设置；脚本不能自行读取短信收件箱。
-// 复用旧版 Scriptable 钥匙串中的飞书配置；不保存短信，不自动重试。
+// 保持 Scriptable 钥匙串配置键不变以兼容旧版；不保存短信，不自动重试。
 const CONFIG_KEY = 'sms-forwarder.feishu.v1';
+
+const PLATFORM_NAMES = {
+  feishu: '飞书',
+  wecom: '企业微信',
+  dingtalk: '钉钉',
+  custom: '自定义 Webhook',
+};
 
 function utf8(text) {
   const out = [];
@@ -77,8 +85,32 @@ function base64(bytes) {
   }
   return out;
 }
+function detectPlatform(url) {
+  if (typeof url !== 'string' || !url || url.length > 2048) return null;
+  if (/[\s#]/.test(url)) return null;
+  const match = /^https:\/\/([^/?#]+)(\/[^#]*)?$/.exec(url);
+  if (!match) return null;
+  const authority = match[1];
+  if (authority.includes('@')) return null;
+  const hostPort = authority.split(':');
+  if (hostPort.length > 2) return null;
+  const host = hostPort[0].toLowerCase();
+  const port = hostPort.length === 2 ? hostPort[1] : '';
+  if (!host || !/^[a-z0-9.-]+$/.test(host) || host.startsWith('.') || host.endsWith('.') || host.includes('..')) return null;
+  if (port && (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535)) return null;
+  if (host === 'open.feishu.cn') {
+    return /^https:\/\/open\.feishu\.cn\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,128}$/.test(url) ? 'feishu' : null;
+  }
+  if (host === 'qyapi.weixin.qq.com') {
+    return /^https:\/\/qyapi\.weixin\.qq\.com\/cgi-bin\/webhook\/send\?key=[A-Za-z0-9_-]{8,128}$/.test(url) ? 'wecom' : null;
+  }
+  if (host === 'oapi.dingtalk.com') {
+    return /^https:\/\/oapi\.dingtalk\.com\/robot\/send\?access_token=[A-Za-z0-9_-]{8,128}$/.test(url) ? 'dingtalk' : null;
+  }
+  return 'custom';
+}
 function validWebhook(url) {
-  return typeof url === 'string' && /^https:\/\/open\.feishu\.cn\/open-apis\/bot\/v2\/hook\/[A-Za-z0-9_-]{8,128}$/.test(url);
+  return detectPlatform(url) !== null;
 }
 function readMessage(input) {
   if (typeof input === 'string') return {body: input, sender: ''};
@@ -91,38 +123,64 @@ function sanitizeDevicePhone(raw) {
   if (typeof raw !== 'string') return '';
   return raw.replace(/[\r\n]+/g, ' ').trim().slice(0, 48).trimEnd();
 }
-function buildPayload(message, secret, seconds, devicePhone) {
+function formatText(message, devicePhone) {
   const cleanDevice = sanitizeDevicePhone(devicePhone);
-  const payload = {
-    msg_type: 'text',
-    content: {
-      text: '短信转发\n来源：iPhone' +
-        (cleanDevice ? '\n接收手机：' + cleanDevice : '') +
-        (message.sender ? '\n发件人：' + message.sender : '') +
-        '\n\n' + message.body
+  return '短信转发\n来源：iPhone' +
+    (cleanDevice ? '\n接收手机：' + cleanDevice : '') +
+    (message.sender ? '\n发件人：' + message.sender : '') +
+    '\n\n' + message.body;
+}
+function buildRequest(platform, webhook, secret, message, nowMillis, devicePhone) {
+  const seconds = Math.floor(nowMillis / 1000);
+  const text = formatText(message, devicePhone);
+  const headers = {'Content-Type': 'application/json; charset=utf-8'};
+  if (platform === 'feishu') {
+    const payload = {msg_type: 'text', content: {text}};
+    if (secret) {
+      payload.timestamp = String(seconds);
+      // 飞书：timestamp + 换行 + secret 作为 HMAC 密钥，对空消息签名。
+      payload.sign = base64(hmacSha256(utf8(seconds + '\n' + secret), []));
     }
-  };
-  if (secret) {
-    payload.timestamp = String(seconds);
-    // 飞书：timestamp + 换行 + secret 作为 HMAC 密钥，对空消息签名。
-    payload.sign = base64(hmacSha256(utf8(seconds+'\n'+secret), []));
+    return {url: webhook, body: JSON.stringify(payload), headers};
   }
-  return payload;
+  if (platform === 'wecom') {
+    const payload = {msgtype: 'text', text: {content: text}};
+    return {url: webhook, body: JSON.stringify(payload), headers};
+  }
+  if (platform === 'dingtalk') {
+    const payload = {msgtype: 'text', text: {content: text}};
+    let url = webhook;
+    if (secret) {
+      // 钉钉：secret 作为 HMAC 密钥，对 毫秒时间戳 + 换行 + secret 签名后 Base64 并 URL 编码。
+      const sign = encodeURIComponent(base64(hmacSha256(utf8(secret), utf8(nowMillis + '\n' + secret))));
+      url = webhook + '&timestamp=' + nowMillis + '&sign=' + sign;
+    }
+    return {url, body: JSON.stringify(payload), headers};
+  }
+  // 自定义 Webhook：与 Android 端协议一致。
+  const payload = {title: '短信转发', text, timestamp: seconds};
+  const body = JSON.stringify(payload);
+  if (secret) {
+    headers['X-Webhook-Timestamp'] = String(seconds);
+    headers['X-Webhook-Signature'] = base64(hmacSha256(utf8(secret), utf8(seconds + '\n' + body)));
+  }
+  return {url: webhook, body, headers};
 }
 async function configure() {
   const alert = new Alert();
-  alert.title = '短信转飞书';
-  alert.message = '转发快捷指令传入的所有非空短信。填写飞书机器人地址、可选签名密钥及本机号码/备注，保存在 Scriptable 钥匙串；本次只保存配置。';
-  alert.addTextField('飞书机器人 Webhook');
-  alert.addSecureTextField('签名密钥（机器人未启用签名时留空）');
+  alert.title = '短信转发';
+  alert.message = '支持飞书、企业微信、钉钉与自定义 HTTPS Webhook（自动识别平台）。配置仅保存在本机 Scriptable 钥匙串；本次只保存配置。';
+  alert.addTextField('群机器人或自定义 HTTPS Webhook');
+  alert.addSecureTextField('签名密钥（飞书/钉钉加签或自定义签名时填写，企微留空）');
   alert.addTextField('本机号码或备注（选填，多机转同一群时区分来源）');
   alert.addAction('保存');
   alert.addCancelAction('取消');
   if (await alert.presentAlert() < 0) return {configured:false};
   const webhook=alert.textFieldValue(0).trim(), secret=alert.textFieldValue(1).trim(), devicePhone=sanitizeDevicePhone(alert.textFieldValue(2));
-  if (!validWebhook(webhook)) throw new Error('飞书机器人地址格式不正确，未保存。');
+  const platform = detectPlatform(webhook);
+  if (!platform) throw new Error('Webhook 地址格式不正确（需为合法的飞书/企微/钉钉或自定义 HTTPS 地址），未保存。');
   Keychain.set(CONFIG_KEY, JSON.stringify({webhook,secret,devicePhone}));
-  return {configured:true};
+  return {configured:true, platform};
 }
 async function main() {
   const input = args.shortcutParameter;
@@ -133,28 +191,41 @@ async function main() {
   const message = readMessage(input);
   if (!message.body.trim()) return {skipped:true, reason:'短信正文为空'};
   if (utf8(message.body).length > 16000) throw new Error('短信超过16KB，未转发。');
-  if (!Keychain.contains(CONFIG_KEY)) throw new Error('请先在 Scriptable 中直接运行脚本，保存飞书配置。');
+  if (!Keychain.contains(CONFIG_KEY)) throw new Error('请先在 Scriptable 中直接运行脚本，保存 Webhook 配置。');
   let saved;
-  try { saved=JSON.parse(Keychain.get(CONFIG_KEY)); } catch (_) { throw new Error('飞书配置不可用，请在 Scriptable 中重新配置。'); }
-  if (!saved || !validWebhook(saved.webhook) || typeof saved.secret !== 'string') throw new Error('飞书配置无效，请重新配置。');
-  const payload=buildPayload(message,saved.secret,Math.floor(Date.now()/1000),saved.devicePhone);
-  const body=JSON.stringify(payload);
-  if (utf8(body).length > 20000) throw new Error('消息超过飞书20KB限制，未转发。');
-  const request = new Request(saved.webhook);
+  try { saved=JSON.parse(Keychain.get(CONFIG_KEY)); } catch (_) { throw new Error('配置不可用，请在 Scriptable 中重新配置。'); }
+  const webhook = saved && typeof saved.webhook === 'string' ? saved.webhook.trim() : '';
+  const platform = detectPlatform(webhook);
+  if (!saved || !platform || typeof saved.secret !== 'string') throw new Error('Webhook 配置无效，请重新配置。');
+  const secret = saved.secret.trim();
+  const built = buildRequest(platform, webhook, secret, message, Date.now(), saved.devicePhone);
+  if (utf8(built.body).length > 20000) throw new Error('消息超过20KB限制，未转发。');
+  const request = new Request(built.url);
   request.method='POST';
-  request.headers={'Content-Type':'application/json; charset=utf-8'};
-  request.body=body;
+  request.headers=built.headers;
+  request.body=built.body;
   request.timeoutInterval=15;
   request.allowInsecureRequest=false;
   request.onRedirect=() => null;
+  const label = PLATFORM_NAMES[platform];
+  if (platform === 'custom') {
+    try { await request.loadString(); }
+    catch (_) { throw new Error(label + '请求未取得有效回执。请先查看目标服务，避免手动重试时重复发送。'); }
+    const status = request.response && request.response.statusCode;
+    if (!Number.isInteger(status) || status < 200 || status > 299) {
+      throw new Error(label + '未确认成功（HTTP ' + (status || '未知') + '）。请检查地址与签名设置。');
+    }
+    return {sent:true, platform};
+  }
   let response;
   try { response=await request.loadJSON(); }
-  catch (_) { throw new Error('飞书请求未取得有效回执。请先查看群消息，避免手动重试时重复发送。'); }
-  if (!request.response || request.response.statusCode !== 200 || !response || response.code !== 0) {
-    const code=response && Number.isInteger(response.code) ? response.code : '未知';
-    throw new Error('飞书未确认成功（错误码 '+code+'）。请检查签名密钥、机器人关键词和群设置。');
+  catch (_) { throw new Error(label + '请求未取得有效回执。请先查看群消息，避免手动重试时重复发送。'); }
+  const okField = platform === 'feishu' ? 'code' : 'errcode';
+  if (!request.response || request.response.statusCode !== 200 || !response || response[okField] !== 0) {
+    const code=response && Number.isInteger(response[okField]) ? response[okField] : '未知';
+    throw new Error(label + '未确认成功（错误码 '+code+'）。请检查签名密钥、机器人关键词和群设置。');
   }
-  return {sent:true};
+  return {sent:true, platform};
 }
 
 if (typeof Script !== 'undefined') {

@@ -1,33 +1,33 @@
 # iPhone 纯快捷指令版配置指南（免装任何 App）
 
-这份指南面向非技术运营、店长与商家团队：无需从 App Store 安装任何第三方软件，只用 iPhone 自带的**「快捷指令」**，按下面 **4 步（约 3 分钟）** 即可把验证码自动转发到飞书群。
+这份指南面向非技术运营、店长与团队成员：无需从 App Store 安装任何第三方软件，只用 iPhone 自带的**「快捷指令」**，按下面 **4 步（约 3 分钟）** 即可把验证码自动转发到 **飞书、企业微信、钉钉或自定义 Webhook**。
 
-> **选型提示**：本方案通过飞书机器人**「自定义关键词：短信转发」**校验身份，不支持 HMAC-SHA256 签名校验。如果团队要求开启签名校验或把密钥隔离在本机钥匙串，请改用 [Scriptable 安全增强版](README.md#双轨选型对比)。
-
----
-
-## 第 1 步：准备飞书群机器人（30 秒）
-
-1. 在飞书打开或新建接收验证码的内部群（确认群成员可信）。
-2. 进入**群设置 → 群机器人 → 添加机器人 → 自定义机器人**，起名「短信转发」。
-3. 复制生成的 **Webhook 地址**（`https://open.feishu.cn/open-apis/bot/v2/hook/...`）。
-4. 在机器人**安全设置**中：
-   - ✅ **只勾选「自定义关键词」**，填入：`短信转发`
-   - ❌ **不要勾选**「签名校验」和「IP 白名单」
+> **选型提示**：纯快捷指令版不支持 HMAC-SHA256 签名校验（飞书与钉钉请使用**「自定义关键词：短信转发」**，企业微信本身无需签名）。如果团队要求开启飞书/钉钉加签、自定义 Webhook 签名，或把密钥隔离在本机钥匙串，请改用 [Scriptable 安全增强版](README.md#双轨选型对比)。
 
 ---
 
-## 第 2 步：扫码一键导入快捷指令（30 秒）
+## 第 1 步：准备群机器人（30 秒）
+
+- **飞书**：在接收群进入**群设置 → 群机器人 → 添加机器人 → 自定义机器人**，起名「短信转发」，复制 Webhook（`https://open.feishu.cn/open-apis/bot/v2/hook/...`）。安全设置中 ✅ **只勾选「自定义关键词」并填 `短信转发`**，❌ 不要勾选「签名校验」和「IP 白名单」。
+- **企业微信**：在接收群添加群机器人，直接复制 Webhook（`https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...`），无需额外安全设置。
+- **钉钉**：在接收群添加自定义机器人，复制 Webhook（`https://oapi.dingtalk.com/robot/send?access_token=...`）。安全设置中 ✅ **只勾选「自定义关键词」并填 `短信转发`**，❌ 不要勾选「加签」和「IP 地址」。
+- **自定义 Webhook**：准备接收 `POST` 请求的 HTTPS 地址，请求体为 `{"title":"短信转发","text":"..."}`。
+
+---
+
+## 第 2 步：扫码一键导入万能快捷指令（30 秒）
 
 用 iPhone **自带相机**（不要用微信扫）扫描 [首页二维码](../README.md#扫码安装最新版android--iphone)，或在 Safari 中直接打开下载：
 
-- **一键导入直链**：[sms-forwarder-ios.shortcut（最新已签名版）](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut)
-- <sub>已通过 Apple 官方 `shortcuts sign --mode anyone` 签名，构建源码完全公开可审计：[build-shortcut.py](build-shortcut.py)</sub>
+- **一键导入直链（万能版，四平台通用）**：[sms-forwarder-ios.shortcut](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut)
+- <sub>已通过 Apple 官方 `shortcuts sign --mode anyone` 签名，构建源码公开可审计：[build-shortcut.py](build-shortcut.py)。单个快捷指令按 Webhook 域名自动识别飞书 / 企微 / 钉钉 / 自定义 Webhook。</sub>
 
 Safari 打开后会自动跳进「快捷指令」App：
 1. 点 **设置快捷指令**。
-2. 第 1 题：粘贴刚复制的飞书 **Webhook 地址**，点下一步。
+2. 第 1 题：粘贴刚复制的 **Webhook 地址**（飞书 / 企微 / 钉钉 / 自定义 HTTPS 均可），点下一步。
 3. 第 2 题：填写 **本机号码或门店备注**（例如 `138****8888` 或 `浦东店·美团号`，留默认的 `iPhone` 也可以），点 **添加快捷指令**。
+
+> **日后想微调？** 点开 `sms-forwarder-ios` 右上角 **`···`** 即可直接改：第 1 个「文本」是 Webhook（换群或换平台只改这里，自动切换格式），第 2 个「文本」是本机备注，第 3 个「文本」是转发文案模板。
 
 ---
 
@@ -35,9 +35,9 @@ Safari 打开后会自动跳进「快捷指令」App：
 
 > **这一步千万不能省！** 如果不先在亮屏状态点一次「始终允许」，后面锁屏收到短信时，系统会静默拦截联网请求。
 
-1. 在「快捷指令」首页，直接点一下刚添加的快捷指令卡片（默认名为 `sms-forwarder-ios`）。
-2. 弹出系统提示**“允许将数据发送到 `open.feishu.cn` 吗？”** 时，点 **始终允许**。
-3. 去飞书群里确认收到一条测试消息：
+1. 在「快捷指令」首页，直接点一下刚添加的快捷指令卡片（如 `sms-forwarder-ios` 或对应平台名）。
+2. 弹出系统提示**“允许将数据发送到对应域名吗？”** 时，点 **始终允许**。
+3. 去接收群或目标服务确认收到一条测试消息：
    ```text
    短信转发
    接收手机：你刚才填的备注
@@ -121,12 +121,10 @@ Safari 打开后会自动跳进「快捷指令」App：
    - 标头：`Content-Type` = `application/json; charset=utf-8`
    - 请求体：**文件** → 选第 2 步的 **词典**
 
-**维护者重新生成并签名 `.shortcut` 离线包（macOS，免费 Apple ID 即可）**：
+**维护者重新生成并签名万能版 `.shortcut` 离线包（macOS，免费 Apple ID 即可）**：
 
 ```bash
-python3 ios/build-shortcut.py /tmp/sms-forwarder-ios.unsigned.shortcut
-shortcuts sign --mode anyone -i /tmp/sms-forwarder-ios.unsigned.shortcut -o /tmp/sms-forwarder-ios.shortcut
-cp /tmp/sms-forwarder-ios.shortcut ios/sms-forwarder-ios.shortcut
+python3 ios/build-shortcut.py --sign ios/sms-forwarder-ios.shortcut
 ```
 
 </details>
