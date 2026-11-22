@@ -40,12 +40,10 @@ Android 单元测试覆盖签名、筛选规则、多规则路由、消息排版
 
 ## iPhone 签名快捷指令
 
-纯快捷指令版的安装包 `ios/sms-forwarder-ios.shortcut` 由 `ios/build-shortcut.py` 生成，需在 macOS 上签名：
+纯快捷指令版的万能安装包（`ios/sms-forwarder-ios.shortcut`，自动识别四平台）由 `ios/build-shortcut.py` 生成，需在 macOS 上签名：
 
 ```bash
-python3 ios/build-shortcut.py /tmp/sms-forwarder-ios.unsigned.shortcut
-shortcuts sign --mode anyone -i /tmp/sms-forwarder-ios.unsigned.shortcut -o /tmp/sms-forwarder-ios.shortcut
-cp /tmp/sms-forwarder-ios.shortcut ios/sms-forwarder-ios.shortcut
+python3 ios/build-shortcut.py --sign ios/sms-forwarder-ios.shortcut
 ```
 
 ## 发布

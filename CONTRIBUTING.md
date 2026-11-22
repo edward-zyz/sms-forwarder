@@ -6,7 +6,7 @@
 
 提交 PR 或功能建议前，请先确认符合以下边界：
 
-- **只做核心闭环**：围绕 Android（多目的地、多规则、商家模板）与 iPhone（纯快捷指令 / Scriptable，仅飞书）的短信筛选、群机器人签名推送、离线重试与可观测排障。
+- **只做核心闭环**：围绕 Android（多目的地、多规则、商家模板）与 iPhone（纯快捷指令 / Scriptable，支持飞书、企微、钉钉与自定义 HTTPS Webhook）的短信筛选、群机器人签名推送、离线重试与可观测排障。
 - **不接受的功能方向**：
   - 引入闭源第三方 SDK、广告、数据统计或第三方中转服务器；
   - 将项目改造成大而全的多通道消息网关、云端同步平台或与短信转发无关的功能膨胀；
@@ -38,7 +38,7 @@ node --test ios/*.test.cjs
 
 - 公开版脚本位于 `ios/短信转飞书.js`，钥匙串配置名保持 `sms-forwarder.feishu.v1`。
 - 新增或修改逻辑需同步补充 `ios/*.test.cjs` 模拟测试，禁止在测试中真实请求线上飞书 Webhook。
-- 纯快捷指令版由 `ios/build-shortcut.py` 生成，修改后需在 macOS 上用 `shortcuts sign --mode anyone` 重新签名并提交 `ios/sms-forwarder-ios.shortcut`，步骤见 [ios/README.md](ios/README.md#维护者重新生成签名快捷指令)。导入问题的默认值不得包含真实 Webhook。
+- 纯快捷指令版由 `ios/build-shortcut.py` 生成，修改后需在 macOS 上运行 `python3 ios/build-shortcut.py --sign ios/sms-forwarder-ios.shortcut` 重新签名并提交 `ios/sms-forwarder-ios.shortcut`，步骤见 [ios/README.md](ios/README.md#维护者重新生成签名快捷指令)。导入问题的默认值不得包含真实 Webhook。
 
 ## 提交规范与脱敏红线
 

@@ -1,6 +1,6 @@
 # 安全策略（Security Policy）
 
-本项目「短信自动转发」聚焦于将收到的短信直接转发到用户自己的群机器人（Android 支持飞书、企业微信、钉钉与自定义 HTTPS Webhook，iPhone 支持飞书），在设计上坚持最小权限、零中转与本地优先。
+本项目「短信自动转发」聚焦于将收到的短信直接转发到用户自己的群机器人（Android 与 iPhone 均支持飞书、企业微信、钉钉与自定义 HTTPS Webhook），在设计上坚持最小权限、零中转与本地优先。
 
 ## 安全与隐私设计边界
 
@@ -16,14 +16,14 @@
 4. **敏感配置存储位置**
    - **Android 端**：各目的地 Webhook、签名密钥、筛选规则、本机号码/备注与待发队列仅保存在本机应用私有目录中，外部应用无法直接读取。
    - **iPhone 纯快捷指令版**：Webhook 明文保存在快捷指令动作中，可能随 iCloud 同步，切勿把填好地址的快捷指令转发给他人。
-   - **iPhone Scriptable 版**：飞书 Webhook、签名密钥与本机号码/备注保存在 Scriptable 钥匙串（配置键 `sms-forwarder.feishu.v1`）。
+   - **iPhone Scriptable 版**：Webhook、签名密钥与本机号码/备注保存在 Scriptable 钥匙串（配置键 `sms-forwarder.feishu.v1`）。
    - 公开源码、测试用例与默认日志中不会包含或打印真实 Webhook、签名密钥或用户短信内容。
 
 ## 验证官方构建产物
 
 每次正式发布（GitHub Releases）均通过 GitHub Actions 自动构建并随附：
 
-- `SHA256SUMS.txt`：版本号 APK、`sms-forwarder-latest.apk`、签名快捷指令 `sms-forwarder-ios.shortcut` 与 Scriptable 脚本 `sms-forwarder-ios.js` 的 SHA-256 校验和；
+- `SHA256SUMS.txt`：版本号 APK、`sms-forwarder-latest.apk`、万能签名快捷指令 `sms-forwarder-ios.shortcut` 与 Scriptable 脚本 `sms-forwarder-ios.js` 的 SHA-256 校验和；
 - Release 正文中的 **Android APK 签名证书 SHA-256 指纹**；
 - GitHub Build Provenance 溯源证明，可使用以下命令验证：
 

@@ -1,6 +1,6 @@
 # 开发约定
 
-这是独立的短信自动转发项目（Android 支持飞书、企业微信、钉钉与自定义 Webhook，iPhone 支持飞书）。文档和注释使用简体中文。根目录 README 提供平台入口，`docs/development.md` 提供构建命令。
+这是独立的短信自动转发项目（Android 与 iPhone 均支持飞书、企业微信、钉钉与自定义 Webhook）。文档和注释使用简体中文。根目录 README 提供平台入口，`docs/development.md` 提供构建命令。
 
 - Android 工程位于 `android/`，iPhone Scriptable 脚本和 Node 测试位于 `ios/`。
 - 构建 Android 前按开发指南设置本机 JDK 和 SDK 路径。个人开发环境脚本与资料放在 Git 忽略的 `private/`。

@@ -11,8 +11,8 @@
 | 收短信的手机 | 推荐方案与准备 | 能力与适用场景 |
 | --- | --- | --- |
 | **Android 10 或以上** | 本项目的 APK、可接收普通短信的手机（**推荐用于 7×24 稳定接码**） | 自动接收符合规则的新 SMS，支持**飞书 / 企业微信 / 钉钉 / 自定义 Webhook** 多目的地、多规则分流、9 个常见商家平台模板一键勾选、离线待发队列与联网重试。 |
-| **iPhone（纯快捷指令版）** | 仅需系统自带「快捷指令」，**免装任何第三方 App**（见[纯快捷指令版指南](ios/shortcuts-guide.md)） | 适合非技术运营快速上手，可扫码导入已签名快捷指令，支持飞书自定义关键词校验；只处理「信息」自动化传入的正文，无离线队列。 |
-| **iPhone（Scriptable 版）** | 苹果「快捷指令」+ [Scriptable](https://apps.apple.com/cn/app/scriptable/id1405459188) + [短信转飞书.js](ios/短信转飞书.js) | 适合开发者与合规团队，支持飞书 HMAC-SHA256 签名校验与本机钥匙串隔离；同样受 iOS 自动化机制限制，无离线队列。 |
+| **iPhone（纯快捷指令版）** | 仅需系统自带「快捷指令」，**免装任何第三方 App**（见[纯快捷指令版指南](ios/shortcuts-guide.md)） | 适合非技术运营快速上手，扫码导入 1 个万能快捷指令即可自动识别**飞书 / 企业微信 / 钉钉 / 自定义 Webhook**；只处理「信息」自动化传入的正文，无离线队列。 |
+| **iPhone（Scriptable 版）** | 苹果「快捷指令」+ [Scriptable](https://apps.apple.com/cn/app/scriptable/id1405459188) + [短信转飞书.js](ios/短信转飞书.js) | 适合开发者与合规团队，自动识别**飞书 / 企业微信 / 钉钉 / 自定义 Webhook**，支持 HMAC-SHA256 签名校验与本机钥匙串隔离；同样受 iOS 自动化机制限制，无离线队列。 |
 
 > **选机建议**：如果你需要长期插电、7×24 小时无人值守接收店铺验证码，请优先使用**闲置旧安卓机**；iPhone 方案受系统自动化与休眠机制限制，更适合主力机轻量应急，不建议作为无人值守接码机。
 
@@ -33,11 +33,11 @@
 
 想在接收端看到横幅提醒时，请确认接收群未静音，并允许飞书发送通知。具体入口可参照[飞书自定义机器人指南](https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot?lang=zh-CN)。
 
-### 其他平台（仅 Android 支持）
+### 其他平台（企业微信、钉钉、自定义 Webhook，Android 与 iPhone 均支持）
 
-Android 版除飞书外，还支持同时配置**企业微信、钉钉与自定义 HTTPS Webhook** 作为转发目的地：
+除飞书外，Android 与 iPhone 均支持配置**企业微信、钉钉与自定义 HTTPS Webhook**：
 - **企业微信**：群机器人 Webhook（`https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...`），无需签名密钥。
-- **钉钉**：群机器人 Webhook（`https://oapi.dingtalk.com/robot/send?access_token=...`），关键词可填「短信转发」，启用加签时填 `SEC...` 密钥。
+- **钉钉**：群机器人 Webhook（`https://oapi.dingtalk.com/robot/send?access_token=...`），关键词填「短信转发」；Android 与 iPhone Scriptable 版支持加签（填 `SEC...` 密钥），iPhone 纯快捷指令版请只勾自定义关键词。
 - **自定义 Webhook**：任意合法 HTTPS 地址，详见 [Android 使用指南](docs/android.md#使用)。
 
 ## 2. Android 安装与验证
@@ -117,8 +117,8 @@ Android App 只接收新到的普通 SMS，不读取历史收件箱，不支持�
 
 iPhone 提供两条官方路线，请按团队需求二选一（详细对比见 [iOS 双轨说明](ios/README.md)）：
 
-- **路线 A：纯快捷指令版（推荐绝大多数运营与商家）**：免装任何第三方 App，仅用飞书关键词校验。扫码导入项目提供的已签名快捷指令，按提示填入 Webhook 与本机号码/备注，再手动建一条「信息」自动化即可 → 请直接阅读 **[iPhone 纯快捷指令版配置指南](ios/shortcuts-guide.md)**。
-- **路线 B：Scriptable 安全增强版（推荐开发者与合规团队）**：支持飞书 HMAC-SHA256 签名校验、钥匙串密钥隔离与严格回执检查 → 请按下方步骤配置。
+- **路线 A：纯快捷指令版（推荐绝大多数运营与团队）**：免装任何第三方 App，扫码导入 1 个万能已签名快捷指令（自动识别飞书 / 企微 / 钉钉 / 自定义 Webhook），按提示填入 Webhook 与本机号码/备注，再绑定「信息」自动化即可 → 请直接阅读 **[iPhone 纯快捷指令版配置指南](ios/shortcuts-guide.md)**。
+- **路线 B：Scriptable 安全增强版（推荐开发者与合规团队）**：自动识别飞书 / 企微 / 钉钉 / 自定义 HTTPS Webhook，支持 HMAC-SHA256 签名校验、钥匙串密钥隔离与严格回执检查 → 请按下方步骤配置。
 
 ![iPhone 信息自动化正确配置示意](docs/assets/ios-automation-setup.png)
 
@@ -126,13 +126,13 @@ iPhone 提供两条官方路线，请按团队需求二选一（详细对比见 
 
 > **iOS 共同边界**：无论哪条路线，iPhone 都只能处理「信息」自动化触发后传入的文本，无法主动监听所有短信，也没有离线队列与自动重试。**不建议拿 iPhone 作为 7×24 无人值守接码机**。
 
-### 安装 Scriptable 脚本并配置飞书（路线 B）
+### 安装 Scriptable 脚本并配置 Webhook（路线 B）
 
 1. 在 App Store 安装 [Scriptable](https://apps.apple.com/cn/app/scriptable/id1405459188)，开发者为 Simon B. Støvring。确认手机上也有苹果的「快捷指令」。
-2. 打开 [短信转飞书.js](ios/短信转飞书.js)，复制文件的**全部代码**（也可通过飞书／文件 App 直接把 `.js` 共享导入 Scriptable）。在 Scriptable 点 **+** 新建脚本，粘贴代码，命名**短信转飞书**。
-3. 在 Scriptable 里直接运行这份脚本，输入 Webhook、可选签名密钥和可选的本机号码/备注，点**保存**。这次操作只写入 Scriptable 钥匙串（配置名 `sms-forwarder.feishu.v1`）。
+2. 打开 [短信转飞书.js](ios/短信转飞书.js)，复制文件的**全部代码**（也可通过飞书／文件 App 直接把 `.js` 共享导入 Scriptable）。在 Scriptable 点 **+** 新建脚本，粘贴代码，命名**短信转发**（或保留**短信转飞书**）。
+3. 在 Scriptable 里直接运行这份脚本，输入群机器人或自定义 HTTPS Webhook（自动识别飞书/企微/钉钉/自定义平台）、可选签名密钥和可选的本机号码/备注，点**保存**。这次操作只写入 Scriptable 钥匙串（配置名保持 `sms-forwarder.feishu.v1` 以兼容旧版）。
 
-### 先手动测试飞书
+### 先手动测试连接
 
 1. 在「快捷指令」的**快捷指令**标签中点 **+**，新建一个临时测试指令。
 2. 添加**文本**动作，输入「转发自测，收到请忽略」。

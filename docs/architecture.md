@@ -15,11 +15,11 @@
 iPhone 端采用双轨方案，均由苹果「快捷指令」的「信息」个人自动化触发（详见 [iOS 双轨说明](../ios/README.md)）：
 
 - **纯快捷指令版（标准版，免装第三方 App）**：
-  - 数据流：`短信 → 快捷指令「信息」自动化 → 本机号码/备注文本 + 两层原生词典构造 JSON → 获取 URL 内容（POST，请求体选文件）→ 飞书机器人`。
-  - 仅支持飞书自定义关键词校验（消息正文固定含 `短信转发`），Webhook 明文存于快捷指令中。仓库提供 [build-shortcut.py](../ios/build-shortcut.py) 生成快捷指令，经 macOS `shortcuts sign --mode anyone` 签名后提交为 `ios/sms-forwarder-ios.shortcut`，并随 Release 发布；导入时通过「导入问题」填写 Webhook 与本机号码/备注。详见 [纯快捷指令版指南](../ios/shortcuts-guide.md)。
+  - 数据流：`短信 → 快捷指令「信息」自动化 → Webhook/备注/正文模板文本 → 按域名条件分支构造原生词典 → 获取 URL 内容（POST，请求体选文件）→ 飞书 / 企业微信 / 钉钉 / 自定义 Webhook`。
+  - 飞书与钉钉使用自定义关键词校验（消息正文固定含 `短信转发`），企业微信无需签名，自定义 Webhook 发送 `{"title":"短信转发","text":"..."}`（不带 HMAC 签名）；Webhook 明文存于快捷指令中。仓库提供 [build-shortcut.py](../ios/build-shortcut.py) 生成单个万能快捷指令，经 macOS `shortcuts sign --mode anyone` 签名后提交为 `ios/sms-forwarder-ios.shortcut`，并随 Release 发布；导入时通过「导入问题」填写 Webhook 与本机号码/备注。详见 [纯快捷指令版指南](../ios/shortcuts-guide.md)。
 - **Scriptable 版（安全增强版）**：
-  - 数据流：`短信 → 快捷指令「信息」自动化 → 提取短信内容文本 → 短信转飞书.js → 飞书机器人`。
-  - `短信转飞书.js` 发送传入的非空正文，Webhook、可选 HMAC-SHA256 签名密钥与可选本机号码/备注隔离保存在本机 Scriptable 钥匙串（`sms-forwarder.feishu.v1`），内置字节上限与回执校验，附带模拟网络单测（`ios/*.test.cjs`）。
+  - 数据流：`短信 → 快捷指令「信息」自动化 → 提取短信内容文本 → 短信转飞书.js → 飞书 / 企业微信 / 钉钉 / 自定义 Webhook`。
+  - `短信转飞书.js` 发送传入的非空正文，按 Webhook 域名自动识别平台（协议与签名算法与 Android 端一致），Webhook、可选 HMAC-SHA256 签名密钥与可选本机号码/备注隔离保存在本机 Scriptable 钥匙串（`sms-forwarder.feishu.v1`），内置字节上限与回执校验，附带模拟网络单测（`ios/*.test.cjs`）。
 
 两条 iOS 路线均不访问历史收件箱，不持久化短信正文，不提供离线队列或自动重试；多个自动化条件重叠命中同一短信时可能产生重复推送。
 

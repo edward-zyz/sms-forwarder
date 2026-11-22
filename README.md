@@ -6,7 +6,7 @@
 - **餐饮门店共享门店账号**：多个员工、店长或股东共用同一个门店账号，验证码却只发到一台手机上；
 - **其他共用手机号的情况**：团队共用的服务账号、放在公司的备用机、个人第二张卡接码等。
 
-手机收到短信后在本地完成筛选，通过 HTTPS 直连发到你自己的群机器人：Android 支持 **飞书、企业微信、钉钉和自定义 Webhook**，可按业务多群分流；iPhone 支持 **飞书**。无中转服务器、无统计埋点、无远程控制。
+手机收到短信后在本地完成筛选，通过 HTTPS 直连发到你自己的群机器人：**Android 与 iPhone 均支持飞书、企业微信、钉钉和自定义 Webhook**，Android 还支持按业务多群分流与离线补发。无中转服务器、无统计埋点、无远程控制。
 
 ![架构与安全边界](docs/assets/architecture.svg)
 
@@ -17,8 +17,8 @@
 | 平台 | 推荐方式 | 获取与指南 | 适用场景 |
 | :--- | :--- | :--- | :--- |
 | **Android（推荐主力）** | 安装正式版 APK | [直接下载最新 APK](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-latest.apk) · [全部 Release 与校验和](https://github.com/edward-zyz/sms-forwarder/releases/latest)<br><sub>国内免梯子镜像：维护者可在发布后补充公开飞书云文档直链，下载后可与 Release 的 `SHA256SUMS.txt` 核验一致。</sub> | 旧安卓机 / 备用机 7×24 稳定收码，支持多群分流、三段防误转与离线重试 |
-| **iPhone（免装 App）** | 纯「快捷指令」自动化 | [直接下载签名快捷指令](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut) · [图文指南](ios/shortcuts-guide.md) | 非技术运营快速上手，零第三方 App，导入时按提示填飞书 Webhook 与本机号码/备注即可（仅支持飞书） |
-| **iPhone（进阶加签）** | 快捷指令 + Scriptable | [Scriptable 配置指南](ios/README.md) · [通用脚本](ios/短信转飞书.js) | 需要飞书 HMAC 签名校验与钥匙串凭证隔离时选用（仅支持飞书） |
+| **iPhone（免装 App）** | 纯「快捷指令」自动化 | [直接下载万能快捷指令](https://github.com/edward-zyz/sms-forwarder/releases/latest/download/sms-forwarder-ios.shortcut) · [图文指南](ios/shortcuts-guide.md) | 扫码即享、零第三方 App；单个指令自动识别飞书 / 企微 / 钉钉 / 自定义 Webhook |
+| **iPhone（进阶加签）** | 快捷指令 + Scriptable | [Scriptable 配置指南](ios/README.md) · [通用脚本](ios/短信转飞书.js) | 支持飞书/企微/钉钉/自定义 Webhook 自动识别，以及 HMAC 签名校验与钥匙串凭证隔离 |
 
 > **iPhone 使用边界**：受 iOS 系统机制限制，快捷指令方案仅处理「信息」自动化触发时传入的短信正文，无法主动监听或读取收件箱历史短信，不建议作为 7×24 小时无人值守接码机。
 
@@ -33,10 +33,10 @@
       <sub>推荐用相机/系统浏览器扫码；微信扫码请点右上角 <code>···</code> → 在浏览器中打开</sub>
     </td>
     <td align="center" width="50%">
-      <strong>iPhone 纯快捷指令（免装 App）</strong><br /><br />
-      <img src="docs/assets/qr-ios-latest.svg" width="168" alt="iPhone 纯快捷指令一键导入二维码" /><br />
-      <sub>已通过 Apple 官方 <code>shortcuts sign</code> 签名 · <a href="ios/build-shortcut.py">构建源码可审计</a></sub><br />
-      <sub>iPhone 相机扫码 → Safari 打开直接导入并填飞书 Webhook 与本机备注 → 按<a href="ios/shortcuts-guide.md">指南</a>新建「信息」自动化</sub>
+      <strong>iPhone 万能快捷指令（免装 App）</strong><br /><br />
+      <img src="docs/assets/qr-ios-latest.svg" width="168" alt="iPhone 万能快捷指令一键导入二维码" /><br />
+      <sub>扫码即享 · 自动识别飞书 / 企微 / 钉钉 / 自定义 · <a href="ios/build-shortcut.py">构建源码可审计</a></sub><br />
+      <sub>iPhone 相机扫码 → Safari 直接导入并填 Webhook 与本机备注 → 按<a href="ios/shortcuts-guide.md">指南</a>绑定「信息」自动化</sub>
     </td>
   </tr>
 </table>
@@ -89,8 +89,8 @@ https://github.com/user-attachments/assets/50dccb40-63f2-487b-a882-928bab247eb6
 | :--- | :--- |
 | [使用手册（HANDBOOK.md）](HANDBOOK.md) | 从零开始的完整上手步骤、国产 ROM（华米 OV）放行与保活排查、微信传包 `.apk.1` 处理、按现象排查 |
 | [Android 用户指南](docs/android.md) | 安装、多目的地与规则路由、模板筛选、本地试短信与权限明细 |
-| [iPhone 纯快捷指令指南](ios/shortcuts-guide.md) | 免装第三方 App，导入签名快捷指令或手动搭建，对接飞书群机器人与系统限制说明 |
-| [iPhone Scriptable 指南](ios/README.md) | 需要飞书 HMAC 签名校验与钥匙串隔离时的进阶配置 |
+| [iPhone 纯快捷指令指南](ios/shortcuts-guide.md) | 免装第三方 App，导入签名快捷指令或手动搭建，对接飞书/企微/钉钉/自定义 Webhook 与系统限制说明 |
+| [iPhone Scriptable 指南](ios/README.md) | 需要 HMAC 签名校验与钥匙串隔离时的进阶配置（支持全部四类平台） |
 | [架构与数据流](docs/architecture.md) | Android / iOS 数据流、去重与重试策略、四类 Webhook 协议与签名规范 |
 | [开发指南](docs/development.md) | 本机 JDK / Android SDK 环境配置、构建与测试命令 |
 | [安全策略（SECURITY.md）](SECURITY.md) | 隐私边界红线、二进制验真方法与漏洞反馈方式 |
@@ -115,7 +115,7 @@ node --test ios/*.test.cjs
 ```
 
 - Android Debug 产物：`android/app/build/outputs/apk/debug/app-debug.apk`
-- iPhone 签名快捷指令：[ios/sms-forwarder-ios.shortcut](ios/sms-forwarder-ios.shortcut)（由 [ios/build-shortcut.py](ios/build-shortcut.py) 生成后经 macOS `shortcuts sign` 签名）
+- iPhone 万能签名快捷指令：[ios/sms-forwarder-ios.shortcut](ios/sms-forwarder-ios.shortcut)（由 [ios/build-shortcut.py](ios/build-shortcut.py) 生成后经 macOS `shortcuts sign` 签名，单个指令支持四平台）
 - iPhone Scriptable 通用脚本：[ios/短信转飞书.js](ios/短信转飞书.js)
 - 公开仓库不包含任何真实 Webhook、签名密钥或短信样本；Android 配置存储在应用私有目录，iOS 脚本配置存储在 Scriptable 钥匙串。
 
