@@ -35,7 +35,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var testChip: LinearLayout
     private lateinit var setupSection: LinearLayout
     private lateinit var stepPermValue: TextView
-    private lateinit var stepDestValue: TextView
     private lateinit var stepRuleValue: TextView
     private lateinit var latest: TextView
     private lateinit var latestTime: TextView
@@ -169,22 +168,16 @@ class MainActivity : AppCompatActivity() {
             addView(testChip)
         })
 
-        // 未就绪时的 3 步准备清单（仅未就绪时显示，0 内边距卡片 + cell 满宽按压态）
+        // 未就绪时的 2 步准备清单（仅未就绪时显示，0 内边距卡片 + cell 满宽按压态）
         setupSection = ui.column().apply {
             ui.sectionTitle(this, "开启前准备")
             addView(ui.listCard {
                 stepPermValue = ui.valueText()
                 addView(stepRow("1. 授予接收短信权限", stepPermValue) { openPermissions() })
                 ui.insetDivider(this, startDp = 18, endDp = 18)
-                stepDestValue = ui.valueText()
-                addView(stepRow("2. 添加转发目的地", stepDestValue) {
-                    val hasDest = runCatching { ConfigStore.load(this@MainActivity).destinations.isNotEmpty() }.getOrDefault(false)
-                    startActivity(Intent(this@MainActivity, if (hasDest) DestinationsActivity::class.java else DestinationEditActivity::class.java))
-                })
-                ui.insetDivider(this, startDp = 18, endDp = 18)
                 stepRuleValue = ui.valueText()
-                addView(stepRow("3. 设置并启用转发规则", stepRuleValue) {
-                    startActivity(Intent(this@MainActivity, RulesActivity::class.java))
+                addView(stepRow("2. 新建第一条转发规则", stepRuleValue) {
+                    startActivity(Intent(this@MainActivity, RuleWizardActivity::class.java))
                 })
             })
         }
@@ -340,14 +333,10 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             val config = configResult.getOrThrow()
-            if (config.destinations.isEmpty()) {
-                toast("请先添加一个转发目的地")
-                startActivity(Intent(this, DestinationEditActivity::class.java))
-                return
-            }
             if (!config.hasActiveRoute()) {
-                toast("请先添加并启用至少一条转发规则")
-                startActivity(Intent(this, RulesActivity::class.java))
+                val noRulesYet = config.rules.isEmpty()
+                toast(if (noRulesYet) "请先新建一条转发规则" else "请先启用至少一条转发规则")
+                startActivity(Intent(this, if (noRulesYet) RuleWizardActivity::class.java else RulesActivity::class.java))
                 return
             }
             ui.dialog().setTitle("开启自动转发")
@@ -525,8 +514,7 @@ class MainActivity : AppCompatActivity() {
         stateDetail.showText(when {
             configResult.isFailure -> "请检查「转发目的地」和「转发规则」并重新保存"
             !permission -> "请先完成下方权限与规则准备"
-            !hasDest -> "请先添加至少一个转发目的地"
-            !hasActiveRoute -> "请启用至少一条转发规则"
+            !hasActiveRoute -> if (config?.rules.isNullOrEmpty()) "请先新建第一条转发规则" else "请启用至少一条转发规则"
             enabled -> "已启用 ${config!!.enabledRules().size} 条规则 · 收到新短信自动送达"
             else -> "已暂停 · 暂停期间的新短信不会补发"
         })
@@ -535,8 +523,7 @@ class MainActivity : AppCompatActivity() {
 
         setupSection.visibility = if (ready || configResult.isFailure) View.GONE else View.VISIBLE
         ui.setValueText(stepPermValue, if (permission) "已授权" else "去授权", if (permission) R.color.subtle else R.color.danger)
-        ui.setValueText(stepDestValue, if (hasDest) "已添加" else "去添加", if (hasDest) R.color.subtle else R.color.accent)
-        ui.setValueText(stepRuleValue, if (hasActiveRoute) "已启用" else "去设置", if (hasActiveRoute) R.color.subtle else R.color.accent)
+        ui.setValueText(stepRuleValue, if (hasActiveRoute) "已启用" else "去新建", if (hasActiveRoute) R.color.subtle else R.color.accent)
 
         val message = prefs.getString("status", "").orEmpty()
         latest.showText(message.ifBlank { "还没有转发记录，收到新短信后会在这里显示结果。" })
