@@ -406,3 +406,60 @@ class RuleWizardState(
         return UUID.randomUUID().toString()
     }
 }
+
+/**
+ * 第 1 步内联新建渠道「发送测试消息」的显式异步状态机（纯 Kotlin，与 formal/RuleWizard.tla 对应）。
+ *
+ * 取代 RuleWizardActivity 中散落的 testingChannel / testChannelRequestSeq / destroyed 标志，
+ * 保证草稿修改、切换类型或页面销毁后，任何乱序返回的旧网络回调都绝不会覆盖当前 UI 状态。
+ */
+class ChannelTestMachine {
+    sealed class State {
+        data object Idle : State()
+        data class Sending(val seq: Int) : State()
+        data class Succeeded(val seq: Int, val message: String) : State()
+        data class Failed(val seq: Int, val message: String) : State()
+    }
+
+    var state: State = State.Idle
+        private set
+
+    var currentSeq: Int = 0
+        private set
+
+    var destroyed: Boolean = false
+        private set
+
+    val isSending: Boolean
+        get() = state is State.Sending
+
+    /** 尝试发起一次新的测试请求；若页面已销毁或正在发送中则返回 null（防重入）。 */
+    fun start(): Int? {
+        if (destroyed || state is State.Sending) return null
+        val seq = ++currentSeq
+        state = State.Sending(seq)
+        return seq
+    }
+
+    /** 输入变化或重置反馈：递增代际并立即回到 Idle，使任何在途旧回调失效。返回是否中断了在途发送。 */
+    fun invalidate(): Boolean {
+        val wasSending = state is State.Sending
+        currentSeq++
+        state = State.Idle
+        return wasSending
+    }
+
+    /** 异步网络回调到达：仅当页面未销毁、处于 Sending 且 seq 匹配当前代际时才更新状态。 */
+    fun complete(seq: Int, ok: Boolean, message: String): Boolean {
+        if (destroyed || seq != currentSeq || state !is State.Sending) return false
+        state = if (ok) State.Succeeded(seq, message) else State.Failed(seq, message)
+        return true
+    }
+
+    /** 页面销毁：置 destroyed 标记、递增代际并清空状态，杜绝销毁后回调刷新 UI。 */
+    fun destroy() {
+        destroyed = true
+        currentSeq++
+        state = State.Idle
+    }
+}

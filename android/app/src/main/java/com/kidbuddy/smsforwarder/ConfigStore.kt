@@ -12,12 +12,12 @@ object ConfigStore {
     private const val FILE = "forward_config"
     private const val KEY = "snapshot"
     private const val MAX_SNAPSHOT_LENGTH = 200_000
-    private var failedRestore = false
+    private val persistence = ConfigPersistenceMachine()
 
     fun newId(): String = UUID.randomUUID().toString()
 
     fun load(context: Context): ForwardConfig = synchronized(State.gate) {
-        if (failedRestore) throw IllegalArgumentException("转发配置保存失败，请重新保存")
+        if (!persistence.canLoad()) throw IllegalArgumentException("转发配置保存失败，请重新保存")
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         if (!prefs.contains(KEY)) {
             return@synchronized migrateLegacyIfNeeded(context)
@@ -40,10 +40,11 @@ object ConfigStore {
         val previous = prefs.all[KEY]
         val success = runCatching { prefs.edit().putString(KEY, snapshot).commit() }.getOrDefault(false)
         if (success) {
-            failedRestore = false
+            persistence.onSaveSucceeded()
             // 同步更新 generation，确保正在运行中的发送任务重新校验配置。
             val settings = State.prefs(context)
-            settings.edit().putLong("generation", settings.getLong("generation", 0) + 1).apply()
+            val nextGen = OutboxStateMachine.nextGeneration(settings.getLong("generation", 0))
+            settings.edit().putLong("generation", nextGen).commit()
             return@synchronized true
         }
         val restored = runCatching {
@@ -55,7 +56,7 @@ object ConfigStore {
             }
             editor.commit()
         }.getOrDefault(false)
-        failedRestore = !restored
+        persistence.onSaveFailed(restored)
         false
     }
 

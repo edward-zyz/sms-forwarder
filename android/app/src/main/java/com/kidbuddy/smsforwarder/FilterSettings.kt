@@ -9,10 +9,10 @@ object FilterSettings {
     private const val FILE = "sms_filter"
     private const val KEY = "snapshot"
     private const val MAX_SNAPSHOT_LENGTH = 20000
-    private var failedRestore = false
+    private val persistence = ConfigPersistenceMachine()
 
     fun load(context: Context): FilterRules = synchronized(State.gate) {
-        if (failedRestore) throw IllegalArgumentException("过滤配置保存失败，请重新保存")
+        if (!persistence.canLoad()) throw IllegalArgumentException("过滤配置保存失败，请重新保存")
         try {
             val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
             if (!prefs.contains(KEY)) return@synchronized FilterRules()
@@ -69,7 +69,7 @@ object FilterSettings {
         val previous = prefs.all[KEY]
         val success = runCatching { prefs.edit().putString(KEY, snapshot).commit() }.getOrDefault(false)
         if (success) {
-            failedRestore = false
+            persistence.onSaveSucceeded()
             return@synchronized true
         }
         // Android commit 失败仍已更新内存，第二次 commit 会先恢复内存再尝试恢复磁盘。
@@ -87,7 +87,7 @@ object FilterSettings {
             }
             editor.commit()
         }.getOrDefault(false)
-        failedRestore = !restored
+        persistence.onSaveFailed(restored)
         false
     }
 

@@ -35,7 +35,9 @@ class Store(context: Context) : SQLiteOpenHelper(context, "outbox.db", null, 2) 
             val now = System.currentTimeMillis()
             db.delete("seen", "created < ?", arrayOf((now - 7 * 86400000L).toString()))
             if (hash != null && db.rawQuery("SELECT 1 FROM seen WHERE hash=?", arrayOf(hash)).use { it.moveToFirst() }) return false
-            require(count() < 200) { "待发队列已满（200 条），本条短信未入队，请处理积压" }
+            require(count() < OutboxStateMachine.MAX_QUEUE_SIZE) {
+                "待发队列已满（${OutboxStateMachine.MAX_QUEUE_SIZE} 条），本条短信未入队，请处理积压"
+            }
             require(text.toByteArray(Charsets.UTF_8).size <= 16000) { "短信过长（超过 16KB），本条未入队" }
             db.insertOrThrow("queue", null, ContentValues().apply {
                 put("text", text)
@@ -56,11 +58,14 @@ class Store(context: Context) : SQLiteOpenHelper(context, "outbox.db", null, 2) 
         val attempts: Int,
         val destinationId: String = "",
         val ruleName: String = "",
-    )
+    ) {
+        val status: OutboxStateMachine.QueueItemStatus
+            get() = OutboxStateMachine.itemStatus(attempts)
+    }
 
     fun next(excludedDestinationIds: Set<String> = emptySet()): Item? {
         val where = buildString {
-            append("attempts < 8")
+            append("attempts < ${OutboxStateMachine.MAX_ATTEMPTS}")
             if (excludedDestinationIds.isNotEmpty()) {
                 val placeholders = excludedDestinationIds.joinToString(",") { "?" }
                 append(" AND destination_id NOT IN ($placeholders)")
@@ -76,7 +81,12 @@ class Store(context: Context) : SQLiteOpenHelper(context, "outbox.db", null, 2) 
     }
 
     fun done(id: Long) { writableDatabase.delete("queue", "id=?", arrayOf(id.toString())) }
-    fun failed(id: Long) { writableDatabase.execSQL("UPDATE queue SET attempts=attempts+1 WHERE id=?", arrayOf(id)) }
+    fun failed(id: Long) {
+        writableDatabase.execSQL(
+            "UPDATE queue SET attempts=MIN(attempts+1, ?) WHERE id=?",
+            arrayOf(OutboxStateMachine.MAX_ATTEMPTS, id),
+        )
+    }
     fun retry() { writableDatabase.execSQL("UPDATE queue SET attempts=0") }
     fun clear() { writableDatabase.delete("queue", null, null) }
 }

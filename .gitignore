@@ -21,3 +21,7 @@ __pycache__/
 
 # 本地视频生成工程（成片已上传至 GitHub，README 直接引用）
 /media/
+
+# TLA+ 形式化验证本地工具缓存与反例临时文件
+/formal/.cache/
+/formal/*_TTrace_*

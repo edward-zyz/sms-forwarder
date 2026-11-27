@@ -11,7 +11,10 @@
 ```bash
 (cd android && ./gradlew testDebugUnitTest assembleDebug lintDebug)
 node --test ios/*.test.cjs
+bash formal/verify.sh
 ```
+
+`bash formal/verify.sh` 会自动校验并运行 `formal/` 下的全部 TLA+ 形式化状态机模型（需 JDK 17+），详见 [formal/README.md](../formal/README.md)。
 
 Windows 用户可在 `android/` 内运行 `gradlew.bat testDebugUnitTest assembleDebug lintDebug`。依赖已经缓存时，可为 Gradle 命令加 `--offline`。
 
