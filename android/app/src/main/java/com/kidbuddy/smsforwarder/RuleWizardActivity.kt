@@ -24,7 +24,6 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import java.io.ByteArrayOutputStream
 import java.net.URL
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.HttpsURLConnection
 
 /**
@@ -85,10 +84,8 @@ class RuleWizardActivity : AppCompatActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var binding = true
-    private var testingChannel = false
-    private var testChannelRequestSeq = 0
+    private val channelTest = ChannelTestMachine()
     @Volatile private var activeTestConnection: HttpsURLConnection? = null
-    private val destroyed = AtomicBoolean(false)
 
     private var guideDialog: BottomSheetDialog? = null
     private var guideDialogType: DestinationType? = null
@@ -829,7 +826,7 @@ class RuleWizardActivity : AppCompatActivity() {
     }
 
     private fun sendTestToDraftChannel() {
-        if (testingChannel) return
+        if (channelTest.isSending) return
         destNameLayout.error = null
         webhookLayout.error = null
         secretLayout.error = null
@@ -859,17 +856,14 @@ class RuleWizardActivity : AppCompatActivity() {
             is RuleWizardState.TestTargetResult.Ready -> res.destination
         }
 
-        val deviceLabel = State.deviceLabel(this)
-        val deviceLine = if (deviceLabel.isNotEmpty()) "\n接收手机：$deviceLabel" else ""
-        val testText = "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${target.type.displayName}「${target.name}」连接成功。"
+        val testText = MessageFormatter.formatTestMessage(target, State.deviceLabel(this))
         val request = DestinationProtocol.buildRequest(target, testText, System.currentTimeMillis())
         if (request.body.size > DestinationProtocol.MAX_PAYLOAD_BYTES) {
             showChannelTestFeedback(Ui.Tone.DANGER, "测试消息体积超过平台限制")
             return
         }
 
-        val seq = ++testChannelRequestSeq
-        testingChannel = true
+        val seq = channelTest.start() ?: return
         sendTestChannelButton.isEnabled = false
         sendTestChannelButton.text = "正在发送测试消息…"
         showChannelTestFeedback(Ui.Tone.NEUTRAL, "正在向「${target.type.displayName}」发送测试消息，请稍候…")
@@ -919,11 +913,11 @@ class RuleWizardActivity : AppCompatActivity() {
             }
 
             mainHandler.post {
-                if (destroyed.get() || isFinishing || isDestroyed || seq != testChannelRequestSeq) return@post
-                testingChannel = false
+                if (isFinishing || isDestroyed) return@post
+                val (ok, msg) = outcome
+                if (!channelTest.complete(seq, ok, msg)) return@post
                 sendTestChannelButton.isEnabled = true
                 sendTestChannelButton.text = "发送测试消息"
-                val (ok, msg) = outcome
                 showChannelTestFeedback(if (ok) Ui.Tone.SUCCESS else Ui.Tone.DANGER, msg)
                 Toast.makeText(this, if (ok) "测试消息发送成功" else msg, Toast.LENGTH_LONG).show()
             }
@@ -938,9 +932,7 @@ class RuleWizardActivity : AppCompatActivity() {
     }
 
     private fun resetChannelTestFeedback() {
-        testChannelRequestSeq++
-        if (testingChannel) {
-            testingChannel = false
+        if (channelTest.invalidate()) {
             activeTestConnection?.disconnect()
             activeTestConnection = null
             sendTestChannelButton.isEnabled = true
@@ -1110,7 +1102,7 @@ class RuleWizardActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        destroyed.set(true)
+        channelTest.destroy()
         activeTestConnection?.disconnect()
         activeTestConnection = null
         mainHandler.removeCallbacksAndMessages(null)

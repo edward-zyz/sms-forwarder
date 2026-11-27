@@ -11,6 +11,52 @@ const PLATFORM_NAMES = {
   custom: '自定义 Webhook',
 };
 
+// 显式单次执行状态机阶段与合法转换表（与 formal/IosForwardPipeline.tla 一一对应）。
+const PIPELINE_STAGES = Object.freeze({
+  INIT: 'INIT',
+  CONFIGURE: 'CONFIGURE',
+  VALIDATE_INPUT: 'VALIDATE_INPUT',
+  LOAD_CONFIG: 'LOAD_CONFIG',
+  BUILD_REQUEST: 'BUILD_REQUEST',
+  HTTP_POST: 'HTTP_POST',
+  CHECK_RECEIPT: 'CHECK_RECEIPT',
+  CONFIGURED: 'CONFIGURED',
+  CONFIG_CANCELLED: 'CONFIG_CANCELLED',
+  SKIPPED: 'SKIPPED',
+  SENT: 'SENT',
+  FAILED: 'FAILED',
+});
+
+const PIPELINE_TRANSITIONS = Object.freeze({
+  INIT: ['CONFIGURE', 'VALIDATE_INPUT', 'FAILED'],
+  CONFIGURE: ['CONFIGURED', 'CONFIG_CANCELLED', 'FAILED'],
+  VALIDATE_INPUT: ['LOAD_CONFIG', 'SKIPPED', 'FAILED'],
+  LOAD_CONFIG: ['BUILD_REQUEST', 'FAILED'],
+  BUILD_REQUEST: ['HTTP_POST', 'FAILED'],
+  HTTP_POST: ['CHECK_RECEIPT', 'FAILED'],
+  CHECK_RECEIPT: ['SENT', 'FAILED'],
+  CONFIGURED: [],
+  CONFIG_CANCELLED: [],
+  SKIPPED: [],
+  SENT: [],
+  FAILED: [],
+});
+
+function createPipelineTracker() {
+  let stage = PIPELINE_STAGES.INIT;
+  return {
+    get stage() { return stage; },
+    transition(nextStage) {
+      const allowed = PIPELINE_TRANSITIONS[stage] || [];
+      if (!allowed.includes(nextStage)) {
+        throw new Error('非法状态迁移：' + stage + ' -> ' + nextStage);
+      }
+      stage = nextStage;
+      return stage;
+    },
+  };
+}
+
 function utf8(text) {
   const out = [];
   for (let i = 0; i < text.length; i++) {
@@ -183,23 +229,63 @@ async function configure() {
   return {configured:true, platform};
 }
 async function main() {
+  const tracker = createPipelineTracker();
   const input = args.shortcutParameter;
   if (input == null || input === '') {
-    if (config.runsInApp) return await configure();
+    if (config.runsInApp) {
+      tracker.transition(PIPELINE_STAGES.CONFIGURE);
+      try {
+        const res = await configure();
+        tracker.transition(res.configured ? PIPELINE_STAGES.CONFIGURED : PIPELINE_STAGES.CONFIG_CANCELLED);
+        return res;
+      } catch (err) {
+        tracker.transition(PIPELINE_STAGES.FAILED);
+        throw err;
+      }
+    }
+    tracker.transition(PIPELINE_STAGES.FAILED);
     throw new Error('缺少短信内容。请在快捷指令中将短信“内容”文本传入脚本参数；手动点击运行不会自动读取最新短信。');
   }
-  const message = readMessage(input);
-  if (!message.body.trim()) return {skipped:true, reason:'短信正文为空'};
-  if (utf8(message.body).length > 16000) throw new Error('短信超过16KB，未转发。');
-  if (!Keychain.contains(CONFIG_KEY)) throw new Error('请先在 Scriptable 中直接运行脚本，保存 Webhook 配置。');
+  tracker.transition(PIPELINE_STAGES.VALIDATE_INPUT);
+  let message;
+  try {
+    message = readMessage(input);
+  } catch (err) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw err;
+  }
+  if (!message.body.trim()) {
+    tracker.transition(PIPELINE_STAGES.SKIPPED);
+    return {skipped:true, reason:'短信正文为空'};
+  }
+  if (utf8(message.body).length > 16000) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error('短信超过16KB，未转发。');
+  }
+  tracker.transition(PIPELINE_STAGES.LOAD_CONFIG);
+  if (!Keychain.contains(CONFIG_KEY)) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error('请先在 Scriptable 中直接运行脚本，保存 Webhook 配置。');
+  }
   let saved;
-  try { saved=JSON.parse(Keychain.get(CONFIG_KEY)); } catch (_) { throw new Error('配置不可用，请在 Scriptable 中重新配置。'); }
+  try { saved=JSON.parse(Keychain.get(CONFIG_KEY)); } catch (_) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error('配置不可用，请在 Scriptable 中重新配置。');
+  }
   const webhook = saved && typeof saved.webhook === 'string' ? saved.webhook.trim() : '';
   const platform = detectPlatform(webhook);
-  if (!saved || !platform || typeof saved.secret !== 'string') throw new Error('Webhook 配置无效，请重新配置。');
+  if (!saved || !platform || typeof saved.secret !== 'string') {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error('Webhook 配置无效，请重新配置。');
+  }
+  tracker.transition(PIPELINE_STAGES.BUILD_REQUEST);
   const secret = saved.secret.trim();
   const built = buildRequest(platform, webhook, secret, message, Date.now(), saved.devicePhone);
-  if (utf8(built.body).length > 20000) throw new Error('消息超过20KB限制，未转发。');
+  if (utf8(built.body).length > 20000) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error('消息超过20KB限制，未转发。');
+  }
+  tracker.transition(PIPELINE_STAGES.HTTP_POST);
   const request = new Request(built.url);
   request.method='POST';
   request.headers=built.headers;
@@ -210,21 +296,33 @@ async function main() {
   const label = PLATFORM_NAMES[platform];
   if (platform === 'custom') {
     try { await request.loadString(); }
-    catch (_) { throw new Error(label + '请求未取得有效回执。请先查看目标服务，避免手动重试时重复发送。'); }
+    catch (_) {
+      tracker.transition(PIPELINE_STAGES.FAILED);
+      throw new Error(label + '请求未取得有效回执。请先查看目标服务，避免手动重试时重复发送。');
+    }
+    tracker.transition(PIPELINE_STAGES.CHECK_RECEIPT);
     const status = request.response && request.response.statusCode;
     if (!Number.isInteger(status) || status < 200 || status > 299) {
+      tracker.transition(PIPELINE_STAGES.FAILED);
       throw new Error(label + '未确认成功（HTTP ' + (status || '未知') + '）。请检查地址与签名设置。');
     }
+    tracker.transition(PIPELINE_STAGES.SENT);
     return {sent:true, platform};
   }
   let response;
   try { response=await request.loadJSON(); }
-  catch (_) { throw new Error(label + '请求未取得有效回执。请先查看群消息，避免手动重试时重复发送。'); }
+  catch (_) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
+    throw new Error(label + '请求未取得有效回执。请先查看群消息，避免手动重试时重复发送。');
+  }
+  tracker.transition(PIPELINE_STAGES.CHECK_RECEIPT);
   const okField = platform === 'feishu' ? 'code' : 'errcode';
   if (!request.response || request.response.statusCode !== 200 || !response || response[okField] !== 0) {
+    tracker.transition(PIPELINE_STAGES.FAILED);
     const code=response && Number.isInteger(response[okField]) ? response[okField] : '未知';
     throw new Error(label + '未确认成功（错误码 '+code+'）。请检查签名密钥、机器人关键词和群设置。');
   }
+  tracker.transition(PIPELINE_STAGES.SENT);
   return {sent:true, platform};
 }
 

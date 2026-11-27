@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var permissionValue: TextView
     private lateinit var deviceSummary: TextView
     private lateinit var deviceValue: TextView
-    private var heroStateCache = ""
+    private var heroStateCache: ServiceReadinessMachine.State? = null
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() { renderStatus(); handler.postDelayed(this, 1500) }
@@ -136,7 +136,7 @@ class MainActivity : AppCompatActivity() {
                             animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
                         }.start()
                     }
-                    changeEnabled(!State.enabled(this@MainActivity))
+                    handlePowerTap()
                 }
             }
             dialContainer.addView(powerButton, FrameLayout.LayoutParams(ui.dp(116), ui.dp(116), Gravity.CENTER))
@@ -314,45 +314,66 @@ class MainActivity : AppCompatActivity() {
         setOnClickListener { ui.haptic(this); action() }
     }
 
-    private fun changeEnabled(checked: Boolean) {
+    private fun currentReadinessSnapshot(configResult: Result<ForwardConfig> = runCatching { ConfigStore.load(this) }): ServiceReadinessMachine.Snapshot {
+        val config = configResult.getOrNull()
+        return ServiceReadinessMachine.Snapshot(
+            enabled = State.enabled(this),
+            hasPermission = hasSmsPermission(),
+            configValid = configResult.isSuccess,
+            hasActiveRoute = config != null && config.hasActiveRoute(),
+            hasAnyRules = config != null && config.rules.isNotEmpty(),
+        )
+    }
+
+    private fun handlePowerTap() {
         synchronized(State.gate) {
-            if (!checked) {
-                if (State.prefs(this).edit().putBoolean("enabled", false).commit()) ForwardJob.cancel(this)
-                else toast("暂停状态保存失败，请重试")
-                renderStatus()
-                return
-            }
-            if (!hasSmsPermission()) {
-                toast("请先授予接收短信权限")
-                openPermissions()
-                return
-            }
-            val configResult = runCatching { ConfigStore.load(this) }
-            if (configResult.isFailure) {
-                toast("转发配置异常，请检查目的地与规则设置")
-                return
-            }
-            val config = configResult.getOrThrow()
-            if (!config.hasActiveRoute()) {
-                val noRulesYet = config.rules.isEmpty()
-                toast(if (noRulesYet) "请先新建一条转发规则" else "请先启用至少一条转发规则")
-                startActivity(Intent(this, if (noRulesYet) RuleWizardActivity::class.java else RulesActivity::class.java))
-                return
-            }
-            ui.dialog().setTitle("开启自动转发")
-                .setMessage("符合已启用规则的新短信及已有待发消息，将发送到对应目的地，内容可能包含验证码。请确认接收群均为可信成员。")
-                .setPositiveButton("开启") { _, _ ->
-                    synchronized(State.gate) {
-                        val latestConfig = runCatching { ConfigStore.load(this) }.getOrNull()
-                        if (hasSmsPermission() && latestConfig != null && latestConfig.hasActiveRoute()) {
-                            val prefs = State.prefs(this)
-                            if (prefs.edit().putBoolean("enabled", true).putLong("generation", prefs.getLong("generation", 0) + 1).commit()) {
-                                ForwardJob.schedule(this)
-                            } else toast("开启失败，请重试")
-                        }
-                        renderStatus()
+            val snapshot = currentReadinessSnapshot()
+            when (ServiceReadinessMachine.onPowerTap(snapshot)) {
+                ServiceReadinessMachine.PowerTapAction.PAUSE -> {
+                    val prefs = State.prefs(this)
+                    val nextGen = OutboxStateMachine.nextGeneration(prefs.getLong("generation", 0))
+                    if (prefs.edit().putBoolean("enabled", false).putLong("generation", nextGen).commit()) {
+                        ForwardJob.cancel(this)
+                    } else {
+                        toast("暂停状态保存失败，请重试")
                     }
-                }.setNegativeButton("取消", null).show()
+                    renderStatus()
+                }
+                ServiceReadinessMachine.PowerTapAction.SHOW_CONFIG_ERROR -> {
+                    toast("转发配置异常，请检查目的地与规则设置")
+                }
+                ServiceReadinessMachine.PowerTapAction.OPEN_PERMISSIONS -> {
+                    toast("请先授予接收短信权限")
+                    openPermissions()
+                }
+                ServiceReadinessMachine.PowerTapAction.OPEN_RULE_WIZARD -> {
+                    toast("请先新建一条转发规则")
+                    startActivity(Intent(this, RuleWizardActivity::class.java))
+                }
+                ServiceReadinessMachine.PowerTapAction.OPEN_RULES -> {
+                    toast("请先启用至少一条转发规则")
+                    startActivity(Intent(this, RulesActivity::class.java))
+                }
+                ServiceReadinessMachine.PowerTapAction.SHOW_CONFIRM_ENABLE -> {
+                    ui.dialog().setTitle("开启自动转发")
+                        .setMessage("符合已启用规则的新短信及已有待发消息，将发送到对应目的地，内容可能包含验证码。请确认接收群均为可信成员。")
+                        .setPositiveButton("开启") { _, _ ->
+                            synchronized(State.gate) {
+                                val latestSnapshot = currentReadinessSnapshot()
+                                if (ServiceReadinessMachine.canCommitEnable(latestSnapshot)) {
+                                    val prefs = State.prefs(this)
+                                    val nextGen = OutboxStateMachine.nextGeneration(prefs.getLong("generation", 0))
+                                    if (prefs.edit().putBoolean("enabled", true).putLong("generation", nextGen).commit()) {
+                                        ForwardJob.schedule(this)
+                                    } else {
+                                        toast("开启失败，请重试")
+                                    }
+                                }
+                                renderStatus()
+                            }
+                        }.setNegativeButton("取消", null).show()
+                }
+            }
         }
     }
 
@@ -384,9 +405,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     synchronized(State.gate) {
                         if (!State.enabled(this)) { toast("转发已暂停"); return@setPositiveButton }
-                        val deviceLabel = State.deviceLabel(this)
-                        val deviceLine = if (deviceLabel.isNotEmpty()) "\n接收手机：$deviceLabel" else ""
-                        val text = "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
+                        val text = MessageFormatter.formatTestMessage(dest, State.deviceLabel(this))
                         Store(this).use { it.add(text, null, dest.id, "测试消息") }
                         State.status(this, "测试消息已入队，等待「${dest.name}」确认")
                         ForwardJob.schedule(this)
@@ -399,7 +418,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun retryQueue() {
         synchronized(State.gate) {
-            if (!State.enabled(this)) { toast("请先开启自动转发"); return }
+            if (!OutboxStateMachine.canManualRetry(State.enabled(this))) { toast("请先开启自动转发"); return }
             Store(this).use { it.retry() }
             State.status(this, "已安排重试")
             ForwardJob.schedule(this)
@@ -408,12 +427,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun clearQueue() {
-        if (State.enabled(this)) { toast("请先暂停转发"); return }
+        val enabled = State.enabled(this)
+        val summary = Store(this).use { it.summary() }
+        if (enabled && OutboxStateMachine.canClearExhausted(summary)) {
+            ui.dialog().setTitle("清理失败项？")
+                .setMessage("将删除 ${summary.exhausted} 条已连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次的积压消息，不影响正常排队中的消息与新短信接收。")
+                .setPositiveButton("清理失败项") { _, _ ->
+                    synchronized(State.gate) {
+                        val removed = Store(this).use { it.clearExhausted() }
+                        if (removed > 0) State.status(this, "已清理 $removed 条达到重试上限的消息")
+                    }
+                    renderStatus()
+                }.setNegativeButton("取消", null).show()
+            return
+        }
+        if (!OutboxStateMachine.canManualClear(enabled)) { toast("请先暂停转发"); return }
         ui.dialog().setTitle("清空待发队列？")
             .setMessage("删除全部待发消息后，无法补发。手机原来的短信会保留。")
             .setPositiveButton("清空") { _, _ ->
                 synchronized(State.gate) {
-                    if (State.enabled(this)) { toast("请先暂停转发"); return@setPositiveButton }
+                    if (!OutboxStateMachine.canManualClear(State.enabled(this))) { toast("请先暂停转发"); return@setPositiveButton }
                     Store(this).use { it.clear() }
                     State.status(this, "已清空待发队列")
                 }
@@ -471,32 +504,34 @@ class MainActivity : AppCompatActivity() {
         val configResult = runCatching { ConfigStore.load(this) }
         val config = configResult.getOrNull()
         val hasDest = config != null && config.destinations.isNotEmpty()
-        val hasActiveRoute = config != null && config.hasActiveRoute()
-        val ready = permission && hasDest && hasActiveRoute && configResult.isSuccess
-        val count = Store(this).use { it.count() }
+        val snapshot = currentReadinessSnapshot(configResult)
+        val ready = snapshot.isReady
+        val queueSummary = Store(this).use { it.summary() }
+        val count = queueSummary.total
 
-        val isRunning = enabled && ready
-        val nextHeroState = when {
-            isRunning -> "running"
-            !ready -> "pending"
-            else -> "paused"
-        }
+        val nextHeroState = ServiceReadinessMachine.evaluate(snapshot)
         if (heroStateCache != nextHeroState) {
             heroStateCache = nextHeroState
             when (nextHeroState) {
-                "running" -> {
+                ServiceReadinessMachine.State.RUNNING -> {
                     powerRing.background = circleDrawable(R.color.accent_surface, R.color.accent, strokeDp = 1)
                     powerButton.background = circleRipple(R.color.accent)
                     powerIcon.imageTintList = ui.colorList(R.color.on_accent)
                     powerButton.contentDescription = "自动转发运行中，点按暂停转发"
                 }
-                "pending" -> {
+                ServiceReadinessMachine.State.CONFIG_ERROR,
+                ServiceReadinessMachine.State.NOT_READY,
+                ServiceReadinessMachine.State.DEGRADED_ENABLED -> {
                     powerRing.background = circleDrawable(R.color.warning_surface)
                     powerButton.background = circleRipple(R.color.surface)
                     powerIcon.imageTintList = ui.colorList(R.color.warning)
-                    powerButton.contentDescription = "尚未完成转发准备，点按查看所需配置"
+                    powerButton.contentDescription = if (nextHeroState == ServiceReadinessMachine.State.DEGRADED_ENABLED) {
+                        "转发开关已开启但缺少必要条件，点按先暂停转发"
+                    } else {
+                        "尚未完成转发准备，点按查看所需配置"
+                    }
                 }
-                else -> {
+                ServiceReadinessMachine.State.PAUSED -> {
                     powerRing.background = circleDrawable(R.color.neutral_surface)
                     powerButton.background = circleRipple(R.color.surface)
                     powerIcon.imageTintList = ui.colorList(R.color.muted)
@@ -505,25 +540,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        stateTitle.showText(when {
-            configResult.isFailure -> "转发配置异常"
-            !ready -> "完成准备后开启"
-            enabled -> "转发运行中"
-            else -> "轻点开启转发"
+        stateTitle.showText(when (nextHeroState) {
+            ServiceReadinessMachine.State.CONFIG_ERROR -> "转发配置异常"
+            ServiceReadinessMachine.State.DEGRADED_ENABLED -> "转发已开启但待修复"
+            ServiceReadinessMachine.State.NOT_READY -> "完成准备后开启"
+            ServiceReadinessMachine.State.RUNNING -> "转发运行中"
+            ServiceReadinessMachine.State.PAUSED -> "轻点开启转发"
         })
-        stateDetail.showText(when {
-            configResult.isFailure -> "请检查「转发目的地」和「转发规则」并重新保存"
-            !permission -> "请先完成下方权限与规则准备"
-            !hasActiveRoute -> if (config?.rules.isNullOrEmpty()) "请先新建第一条转发规则" else "请启用至少一条转发规则"
-            enabled -> "已启用 ${config!!.enabledRules().size} 条规则 · 收到新短信自动送达"
-            else -> "已暂停 · 暂停期间的新短信不会补发"
+        stateDetail.showText(when (nextHeroState) {
+            ServiceReadinessMachine.State.CONFIG_ERROR -> "请检查「转发目的地」和「转发规则」并重新保存"
+            ServiceReadinessMachine.State.DEGRADED_ENABLED ->
+                if (!permission) "权限已被撤销，请先重新授权或点按暂停"
+                else "当前没有生效规则，请启用规则或点按暂停"
+            ServiceReadinessMachine.State.NOT_READY ->
+                if (!permission) "请先完成下方权限与规则准备"
+                else if (config?.rules.isNullOrEmpty()) "请先新建第一条转发规则"
+                else "请启用至少一条转发规则"
+            ServiceReadinessMachine.State.RUNNING -> "已启用 ${config!!.enabledRules().size} 条规则 · 收到新短信自动送达"
+            ServiceReadinessMachine.State.PAUSED -> "已暂停 · 暂停期间的新短信不会补发"
         })
 
         testChip.visibility = if (enabled && hasDest) View.VISIBLE else View.GONE
 
         setupSection.visibility = if (ready || configResult.isFailure) View.GONE else View.VISIBLE
         ui.setValueText(stepPermValue, if (permission) "已授权" else "去授权", if (permission) R.color.subtle else R.color.danger)
-        ui.setValueText(stepRuleValue, if (hasActiveRoute) "已启用" else "去新建", if (hasActiveRoute) R.color.subtle else R.color.accent)
+        ui.setValueText(stepRuleValue, if (snapshot.hasActiveRoute) "已启用" else "去新建", if (snapshot.hasActiveRoute) R.color.subtle else R.color.accent)
 
         val message = prefs.getString("status", "").orEmpty()
         latest.showText(message.ifBlank { "还没有转发记录，收到新短信后会在这里显示结果。" })
@@ -533,14 +574,24 @@ class MainActivity : AppCompatActivity() {
 
         queueCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         if (count > 0) {
-            ui.setValueText(queueCountText, "$count 条待发", R.color.warning, bold = true)
-            queueHint.showText(if (enabled) {
-                "网络恢复后会自动重试；连续失败 8 次后可手动重试。"
+            val countLabel = if (queueSummary.hasExhausted) {
+                "$count 条待发（${queueSummary.exhausted} 条已达上限）"
             } else {
-                "转发已暂停。开启转发将继续发送，也可以直接清空。"
+                "$count 条待发"
+            }
+            ui.setValueText(queueCountText, countLabel, R.color.warning, bold = true)
+            queueHint.showText(when {
+                enabled && queueSummary.hasExhausted ->
+                    "有 ${queueSummary.exhausted} 条已连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次不再自动重试；可点「重试发送」或直接「清理失败项」。"
+                enabled ->
+                    "网络恢复后会自动重试；连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次后可手动重试。"
+                else ->
+                    "转发已暂停。开启转发将继续发送，也可以直接清空。"
             })
-            ui.enabled(retryButton, enabled)
-            ui.enabled(clearButton, !enabled)
+            ui.enabled(retryButton, OutboxStateMachine.canManualRetry(enabled))
+            val canClear = OutboxStateMachine.canManualClear(enabled) || OutboxStateMachine.canClearExhausted(queueSummary)
+            clearButton.text = if (enabled && queueSummary.hasExhausted) "清理失败项" else "清空队列"
+            ui.enabled(clearButton, canClear)
         }
 
         if (config == null) {

@@ -347,22 +347,22 @@ class FilterActivity : AppCompatActivity() {
             showError(msg)
             return
         }
-        synchronized(State.gate) {
-            val current = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig(destinations = destinations))
+        when (val result = ConfigStore.update(this) { current ->
             val nextRules = if (editingRuleId != null && current.rules.any { it.id == editingRuleId }) {
                 current.rules.map { if (it.id == editingRuleId) candidate else it }
             } else {
                 current.rules + candidate
             }
-            val nextConfig = current.copy(rules = nextRules)
-            nextConfig.validationError()?.let { showError(it); return }
-            if (!ConfigStore.save(this, nextConfig)) {
-                showError("没有保存成功，请检查手机存储空间后重试。")
-                return
+            Result.success(current.copy(rules = nextRules))
+        }) {
+            is ConfigStore.UpdateResult.Saved -> {
+                Toast.makeText(this, "规则「$trimmedName」已保存", Toast.LENGTH_LONG).show()
+                finish()
             }
+            is ConfigStore.UpdateResult.LoadFailed -> showError(result.message)
+            is ConfigStore.UpdateResult.Rejected -> showError(result.message)
+            ConfigStore.UpdateResult.SaveFailed -> showError("没有保存成功，请检查手机存储空间后重试。")
         }
-        Toast.makeText(this, "规则「$trimmedName」已保存", Toast.LENGTH_LONG).show()
-        finish()
     }
 
     private fun showError(message: String) {

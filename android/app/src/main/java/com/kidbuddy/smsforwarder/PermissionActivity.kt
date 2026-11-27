@@ -84,10 +84,15 @@ class PermissionActivity : AppCompatActivity() {
                 ))
             })
             ui.gap(this, 6)
-            if (smsGranted) {
+            val permState = ServiceReadinessMachine.evaluateSmsPermissionUi(
+                granted = smsGranted,
+                askedBefore = asked,
+                shouldShowRationale = shouldShowRequestPermissionRationale(sms),
+            )
+            if (permState == ServiceReadinessMachine.SmsPermissionUiState.GRANTED) {
                 addView(ui.text("可正常接收系统送达的新短信，不读取手机历史短信。", 13f, R.color.muted))
             } else {
-                val canRequest = !asked || shouldShowRequestPermissionRationale(sms)
+                val canRequest = permState == ServiceReadinessMachine.SmsPermissionUiState.CAN_REQUEST_DIALOG
                 addView(ui.text("开启自动转发前，必须授予接收短信权限。", 13.5f, R.color.danger))
                 ui.gap(this, 12)
                 if (canRequest) {

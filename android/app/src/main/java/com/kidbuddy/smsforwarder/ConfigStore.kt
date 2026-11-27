@@ -12,12 +12,12 @@ object ConfigStore {
     private const val FILE = "forward_config"
     private const val KEY = "snapshot"
     private const val MAX_SNAPSHOT_LENGTH = 200_000
-    private var failedRestore = false
+    private val persistence = ConfigPersistenceMachine()
 
     fun newId(): String = UUID.randomUUID().toString()
 
     fun load(context: Context): ForwardConfig = synchronized(State.gate) {
-        if (failedRestore) throw IllegalArgumentException("转发配置保存失败，请重新保存")
+        if (!persistence.canLoad()) throw IllegalArgumentException("转发配置保存失败，请重新保存")
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         if (!prefs.contains(KEY)) {
             return@synchronized migrateLegacyIfNeeded(context)
@@ -40,10 +40,11 @@ object ConfigStore {
         val previous = prefs.all[KEY]
         val success = runCatching { prefs.edit().putString(KEY, snapshot).commit() }.getOrDefault(false)
         if (success) {
-            failedRestore = false
+            persistence.onSaveSucceeded()
             // 同步更新 generation，确保正在运行中的发送任务重新校验配置。
             val settings = State.prefs(context)
-            settings.edit().putLong("generation", settings.getLong("generation", 0) + 1).apply()
+            val nextGen = OutboxStateMachine.nextGeneration(settings.getLong("generation", 0))
+            settings.edit().putLong("generation", nextGen).commit()
             return@synchronized true
         }
         val restored = runCatching {
@@ -55,9 +56,34 @@ object ConfigStore {
             }
             editor.commit()
         }.getOrDefault(false)
-        failedRestore = !restored
+        persistence.onSaveFailed(restored)
         false
     }
+
+    sealed class UpdateResult {
+        data class Saved(val config: ForwardConfig) : UpdateResult()
+        data class LoadFailed(val message: String) : UpdateResult()
+        data class Rejected(val message: String) : UpdateResult()
+        data object SaveFailed : UpdateResult()
+    }
+
+    /**
+     * 安全原子更新配置（在 State.gate 锁内执行）：
+     * 若当前已保存配置损坏或处于回滚失败锁定态，绝不静默降级为空配置覆写用户数据。
+     */
+    fun update(context: Context, transform: (ForwardConfig) -> Result<ForwardConfig>): UpdateResult =
+        synchronized(State.gate) {
+            val current = runCatching { load(context) }.getOrElse { err ->
+                return@synchronized UpdateResult.LoadFailed(err.message ?: "转发配置异常，请先检查并恢复配置")
+            }
+            val next = transform(current).getOrElse { err ->
+                return@synchronized UpdateResult.Rejected(err.message ?: "配置校验未通过")
+            }
+            next.validationError()?.let { err ->
+                return@synchronized UpdateResult.Rejected(err)
+            }
+            if (save(context, next)) UpdateResult.Saved(next) else UpdateResult.SaveFailed
+        }
 
     /** 兼容旧版未绑定 destinationId 的历史待发队列条目。 */
     fun resolveDestination(context: Context, config: ForwardConfig, destinationId: String): Destination? {

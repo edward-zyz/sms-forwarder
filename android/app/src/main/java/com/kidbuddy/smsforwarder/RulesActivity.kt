@@ -116,10 +116,19 @@ class RulesActivity : AppCompatActivity() {
     }
 
     private fun toggleRule(ruleId: String, enabled: Boolean) {
-        synchronized(State.gate) {
-            val current = runCatching { ConfigStore.load(this) }.getOrNull() ?: return
-            val next = current.copy(rules = current.rules.map { if (it.id == ruleId) it.copy(enabled = enabled) else it })
-            if (!ConfigStore.save(this, next)) {
+        when (val result = ConfigStore.update(this) { current ->
+            Result.success(current.copy(rules = current.rules.map { if (it.id == ruleId) it.copy(enabled = enabled) else it }))
+        }) {
+            is ConfigStore.UpdateResult.Saved -> Unit
+            is ConfigStore.UpdateResult.LoadFailed -> {
+                Toast.makeText(this, result.message, Toast.LENGTH_SHORT).show()
+                renderList()
+            }
+            is ConfigStore.UpdateResult.Rejected -> {
+                Toast.makeText(this, result.message, Toast.LENGTH_SHORT).show()
+                renderList()
+            }
+            ConfigStore.UpdateResult.SaveFailed -> {
                 Toast.makeText(this, "状态保存失败，请重试", Toast.LENGTH_SHORT).show()
                 renderList()
             }
@@ -131,14 +140,13 @@ class RulesActivity : AppCompatActivity() {
             .setTitle("删除规则？")
             .setMessage("删除「${rule.name}」后，不再按该规则转发新短信，已有待发队列不变。")
             .setPositiveButton("删除") { _, _ ->
-                synchronized(State.gate) {
-                    val current = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig())
-                    val next = current.copy(rules = current.rules.filterNot { it.id == rule.id })
-                    if (ConfigStore.save(this, next)) {
-                        Toast.makeText(this, "已删除规则「${rule.name}」", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(this, "删除失败，请重试", Toast.LENGTH_SHORT).show()
-                    }
+                when (val result = ConfigStore.update(this) { current ->
+                    Result.success(current.copy(rules = current.rules.filterNot { it.id == rule.id }))
+                }) {
+                    is ConfigStore.UpdateResult.Saved -> Toast.makeText(this, "已删除规则「${rule.name}」", Toast.LENGTH_SHORT).show()
+                    is ConfigStore.UpdateResult.LoadFailed -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    is ConfigStore.UpdateResult.Rejected -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    ConfigStore.UpdateResult.SaveFailed -> Toast.makeText(this, "删除失败，请重试", Toast.LENGTH_SHORT).show()
                 }
                 renderList()
             }

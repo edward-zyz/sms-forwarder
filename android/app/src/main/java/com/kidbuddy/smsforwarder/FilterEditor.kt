@@ -23,6 +23,19 @@ class FilterEditor(
         val hasNonDefaultDigits: Boolean,
     )
 
+    enum class ActiveMode { VERIFICATION, KEYWORDS }
+
+    /** 显式封装跨模式切换的草稿记忆状态（与 formal/FilterEditor.tla 对应）。 */
+    private data class DraftMemory(
+        val lastActiveMode: ActiveMode,
+        val excludeEditedByUser: Boolean,
+        val userBaseExcludes: List<String>,
+        val keywordsDraft: List<String>,
+        val keywordsMatchAll: Boolean,
+        val keywordsCodeWord: Boolean,
+        val keywordsDigits: Boolean,
+    )
+
     var rules: FilterRules = initial
         private set
     var mode: Mode = selected
@@ -31,13 +44,15 @@ class FilterEditor(
         private set
     val isDirty: Boolean get() = rules != saved
 
-    private var cameFromVerification: Boolean = (selected == Mode.VERIFICATION)
-    private var excludeEditedByUser: Boolean = initialHasCustomExcludes(initial, selected)
-    private var userBaseExcludes: List<String> = initialUserExcludes(initial, selected)
-    private var keywordsDraft: List<String> = if (selected == Mode.KEYWORDS) initial.includeKeywords else emptyList()
-    private var keywordsMatchAll: Boolean = if (selected == Mode.KEYWORDS) initial.matchAll else false
-    private var keywordsCodeWord: Boolean = if (selected == Mode.KEYWORDS) initial.requireCodeWord else false
-    private var keywordsDigits: Boolean = if (selected == Mode.KEYWORDS) initial.requireDigits else false
+    private var memory: DraftMemory = DraftMemory(
+        lastActiveMode = if (selected == Mode.VERIFICATION) ActiveMode.VERIFICATION else ActiveMode.KEYWORDS,
+        excludeEditedByUser = initialHasCustomExcludes(initial, selected),
+        userBaseExcludes = initialUserExcludes(initial, selected),
+        keywordsDraft = if (selected == Mode.KEYWORDS) initial.includeKeywords else emptyList(),
+        keywordsMatchAll = if (selected == Mode.KEYWORDS) initial.matchAll else false,
+        keywordsCodeWord = if (selected == Mode.KEYWORDS) initial.requireCodeWord else false,
+        keywordsDigits = if (selected == Mode.KEYWORDS) initial.requireDigits else false,
+    )
 
     fun select(value: Mode) {
         if (value == mode) return
@@ -50,29 +65,32 @@ class FilterEditor(
                 val targets = selectedPlatforms.ifEmpty { setOf(PlatformTemplates.ALL_VERIFICATION_ID) }
                 selectedPlatforms = targets
                 mode = Mode.VERIFICATION
-                cameFromVerification = true
+                memory = memory.copy(lastActiveMode = ActiveMode.VERIFICATION)
                 rules = buildVerificationRules(targets)
             }
             Mode.KEYWORDS -> {
-                val fromVerification = cameFromVerification
+                val fromVerification = memory.lastActiveMode == ActiveMode.VERIFICATION
                 mode = Mode.KEYWORDS
-                cameFromVerification = false
                 rules = if (fromVerification) {
-                    val nextExcludes = if (excludeEditedByUser) rules.excludeKeywords else userBaseExcludes
+                    val nextExcludes = if (memory.excludeEditedByUser) rules.excludeKeywords else memory.userBaseExcludes
+                    memory = memory.copy(lastActiveMode = ActiveMode.KEYWORDS)
                     rules.copy(
                         enabled = true,
-                        includeKeywords = keywordsDraft,
-                        requireCodeWord = keywordsCodeWord,
-                        requireDigits = keywordsDigits,
-                        matchAll = keywordsMatchAll,
+                        includeKeywords = memory.keywordsDraft,
+                        requireCodeWord = memory.keywordsCodeWord,
+                        requireDigits = memory.keywordsDigits,
+                        matchAll = memory.keywordsMatchAll,
                         excludeKeywords = nextExcludes,
                     )
                 } else {
                     val enabledRules = rules.copy(enabled = true)
-                    keywordsDraft = enabledRules.includeKeywords
-                    keywordsMatchAll = enabledRules.matchAll
-                    keywordsCodeWord = enabledRules.requireCodeWord
-                    keywordsDigits = enabledRules.requireDigits
+                    memory = memory.copy(
+                        lastActiveMode = ActiveMode.KEYWORDS,
+                        keywordsDraft = enabledRules.includeKeywords,
+                        keywordsMatchAll = enabledRules.matchAll,
+                        keywordsCodeWord = enabledRules.requireCodeWord,
+                        keywordsDigits = enabledRules.requireDigits,
+                    )
                     enabledRules
                 }
             }
@@ -91,33 +109,32 @@ class FilterEditor(
         val normalized = normalizePlatforms(selectedIds)
         selectedPlatforms = normalized
         mode = Mode.VERIFICATION
-        cameFromVerification = true
+        memory = memory.copy(lastActiveMode = ActiveMode.VERIFICATION)
         rules = buildVerificationRules(normalized)
     }
 
     fun include(values: List<String>) {
         rules = rules.copy(includeKeywords = values)
-        if (mode == Mode.KEYWORDS) keywordsDraft = values
+        if (mode == Mode.KEYWORDS) memory = memory.copy(keywordsDraft = values)
     }
 
     fun requireCodeWord(value: Boolean) {
         rules = rules.copy(requireCodeWord = value)
-        if (mode == Mode.KEYWORDS) keywordsCodeWord = value
+        if (mode == Mode.KEYWORDS) memory = memory.copy(keywordsCodeWord = value)
     }
 
     fun digits(value: Boolean) {
         rules = rules.copy(requireDigits = value)
-        if (mode == Mode.KEYWORDS) keywordsDigits = value
+        if (mode == Mode.KEYWORDS) memory = memory.copy(keywordsDigits = value)
     }
 
     fun matchAll(value: Boolean) {
         rules = rules.copy(matchAll = value)
-        if (mode == Mode.KEYWORDS) keywordsMatchAll = value
+        if (mode == Mode.KEYWORDS) memory = memory.copy(keywordsMatchAll = value)
     }
 
     fun exclude(values: List<String>) {
-        excludeEditedByUser = true
-        userBaseExcludes = values
+        memory = memory.copy(excludeEditedByUser = true, userBaseExcludes = values)
         rules = rules.copy(excludeKeywords = values)
     }
 
@@ -169,8 +186,8 @@ class FilterEditor(
         suggestRuleName(rules, mode, selectedPlatforms, destinationName)
 
     private fun buildVerificationRules(targets: Set<String>): FilterRules {
-        val built = PlatformTemplates.buildRules(targets, rules.copy(excludeKeywords = userBaseExcludes))
-        return if (excludeEditedByUser) {
+        val built = PlatformTemplates.buildRules(targets, rules.copy(excludeKeywords = memory.userBaseExcludes))
+        return if (memory.excludeEditedByUser) {
             built.copy(excludeKeywords = rules.excludeKeywords)
         } else {
             built

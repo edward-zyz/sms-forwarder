@@ -18,17 +18,26 @@ class ForwardJob : JobService() {
     }
     @Volatile private var currentRun = Run()
     override fun onStartJob(params: JobParameters): Boolean {
+        // 若系统极端情况下未先回调 onStopJob 即重入，主动中止旧 Run 并断开旧连接，防止双 Run 并发。
+        currentRun.stopped.set(true)
+        currentRun.connection?.disconnect()
         val run = Run()
         currentRun = run
         val stopped = run.stopped
         val generation = State.prefs(this).getLong("generation", 0)
-        fun permitted() = !stopped.get() && State.enabled(this) && State.prefs(this).getLong("generation", 0) == generation
+        fun currentGen() = State.prefs(this).getLong("generation", 0)
+        fun permitted() = OutboxStateMachine.isRunPermitted(
+            stopped = stopped.get(),
+            enabled = State.enabled(this),
+            runGeneration = generation,
+            currentGeneration = currentGen(),
+        )
         Thread {
             var retry = false
             Store(this).use { store ->
                 try {
                     val failedDestinations = mutableSetOf<String>()
-                    repeat(20) {
+                    repeat(OutboxStateMachine.MAX_BATCH_SIZE) {
                         if (!permitted()) return@repeat
                         val item = synchronized(State.gate) { store.next(failedDestinations) } ?: return@repeat
                         val config = try {
@@ -39,10 +48,22 @@ class ForwardJob : JobService() {
                         }
                         val destination = ConfigStore.resolveDestination(this, config, item.destinationId)
                         if (destination == null || destination.validationError() != null) {
-                            synchronized(State.gate) { store.failed(item.id) }
-                            failedDestinations += item.destinationId
-                            State.status(this, "转发目的地无效或已删除，第 ${item.attempts + 1}/8 次失败，请检查配置或清理队列")
-                            retry = true
+                            val disposition = OutboxStateMachine.onSendFailure(
+                                stopped = stopped.get(),
+                                enabled = State.enabled(this),
+                                runGeneration = generation,
+                                currentGeneration = currentGen(),
+                            )
+                            if (disposition == OutboxStateMachine.FailureDisposition.RECORD_FAILURE_AND_ISOLATE) {
+                                synchronized(State.gate) { store.failed(item.id) }
+                                failedDestinations += item.destinationId
+                                val nextAttempt = OutboxStateMachine.nextAttemptsOnFailure(item.attempts)
+                                State.status(
+                                    this,
+                                    "转发目的地无效或已删除，第 $nextAttempt/${OutboxStateMachine.MAX_ATTEMPTS} 次失败，请检查配置或清理队列",
+                                )
+                                retry = true
+                            }
                             return@repeat
                         }
                         try {
@@ -81,23 +102,38 @@ class ForwardJob : JobService() {
                             synchronized(State.gate) { store.done(item.id) }
                             State.status(this, "${destination.type.displayName}「${destination.name}」已接收一条消息")
                         } catch (e: Exception) {
-                            if (!stopped.get() && State.enabled(this)) {
+                            val disposition = OutboxStateMachine.onSendFailure(
+                                stopped = stopped.get(),
+                                enabled = State.enabled(this),
+                                runGeneration = generation,
+                                currentGeneration = currentGen(),
+                            )
+                            if (disposition == OutboxStateMachine.FailureDisposition.RECORD_FAILURE_AND_ISOLATE) {
                                 synchronized(State.gate) { store.failed(item.id) }
                                 failedDestinations += item.destinationId
                                 val detail = if (e is IllegalStateException) e.message.orEmpty() else "网络连接失败"
-                                State.status(this, "「${destination.name}」$detail；第 ${item.attempts + 1}/8 次失败，保留待发")
+                                val nextAttempt = OutboxStateMachine.nextAttemptsOnFailure(item.attempts)
+                                State.status(
+                                    this,
+                                    "「${destination.name}」$detail；第 $nextAttempt/${OutboxStateMachine.MAX_ATTEMPTS} 次失败，保留待发",
+                                )
                                 retry = true
                             }
                         } finally { run.connection?.disconnect(); run.connection = null }
                     }
-                    retry = retry || store.next() != null
                 } catch (_: Exception) { State.status(this, "处理队列失败，稍后重试"); retry = true }
             }
             synchronized(State.gate) {
                 if (!stopped.get()) {
                     // 与接收广播共用锁，收尾时重新读队列，防止恰在发完最后一条时新短信入队。
                     val remaining = Store(this).use { it.next() != null }
-                    jobFinished(params, (retry || remaining) && State.enabled(this))
+                    val reschedule = OutboxStateMachine.shouldRescheduleOnFinish(
+                        stopped = stopped.get(),
+                        retryRequested = retry,
+                        hasEligibleRemaining = remaining,
+                        enabled = State.enabled(this),
+                    )
+                    jobFinished(params, reschedule)
                 }
             }
         }.start()
