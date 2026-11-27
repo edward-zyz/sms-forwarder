@@ -28,6 +28,14 @@ class Store(context: Context) : SQLiteOpenHelper(context, "outbox.db", null, 2) 
 
     fun count(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM queue", null).use { it.moveToFirst(); it.getInt(0) }
 
+    fun exhaustedCount(): Int = readableDatabase.rawQuery(
+        "SELECT COUNT(*) FROM queue WHERE attempts >= ?",
+        arrayOf(OutboxStateMachine.MAX_ATTEMPTS.toString()),
+    ).use { it.moveToFirst(); it.getInt(0) }
+
+    fun summary(): OutboxStateMachine.QueueSummary =
+        OutboxStateMachine.QueueSummary(total = count(), exhausted = exhaustedCount())
+
     fun add(text: String, hash: String? = null, destinationId: String = "", ruleName: String = ""): Boolean {
         val db = writableDatabase
         db.beginTransaction()
@@ -88,6 +96,11 @@ class Store(context: Context) : SQLiteOpenHelper(context, "outbox.db", null, 2) 
         )
     }
     fun retry() { writableDatabase.execSQL("UPDATE queue SET attempts=0") }
+    fun clearExhausted(): Int = writableDatabase.delete(
+        "queue",
+        "attempts >= ?",
+        arrayOf(OutboxStateMachine.MAX_ATTEMPTS.toString()),
+    )
     fun clear() { writableDatabase.delete("queue", null, null) }
 }
 

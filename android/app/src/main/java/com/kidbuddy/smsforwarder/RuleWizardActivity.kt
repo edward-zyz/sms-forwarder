@@ -856,9 +856,7 @@ class RuleWizardActivity : AppCompatActivity() {
             is RuleWizardState.TestTargetResult.Ready -> res.destination
         }
 
-        val deviceLabel = State.deviceLabel(this)
-        val deviceLine = if (deviceLabel.isNotEmpty()) "\n接收手机：$deviceLabel" else ""
-        val testText = "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${target.type.displayName}「${target.name}」连接成功。"
+        val testText = MessageFormatter.formatTestMessage(target, State.deviceLabel(this))
         val request = DestinationProtocol.buildRequest(target, testText, System.currentTimeMillis())
         if (request.body.size > DestinationProtocol.MAX_PAYLOAD_BYTES) {
             showChannelTestFeedback(Ui.Tone.DANGER, "测试消息体积超过平台限制")

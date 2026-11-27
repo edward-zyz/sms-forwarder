@@ -203,6 +203,15 @@ ManualClear ==
     /\ UNCHANGED <<enabled, generation, seen, jobState, runGen,
                    runStopped, inFlight, destHealthy, staleFailBlocked>>
 
+\* 12b. 用户清理已达最大重试次数的死信条目（无需暂停全局转发，且绝不误删 QUEUED/RETRYING 条目）
+ClearExhausted ==
+    /\ jobState = "IDLE"
+    /\ \E e \in DOMAIN queue : queue[e] = MaxAttempts
+    /\ LET active == { e \in DOMAIN queue : queue[e] < MaxAttempts } IN
+       queue' = [e \in active |-> queue[e]]
+    /\ UNCHANGED <<enabled, generation, seen, jobState, runGen,
+                   runStopped, inFlight, failedDests, destHealthy, staleFailBlocked>>
+
 \* 13. 外部环境：目的地网络/配置健康状态切换
 ToggleDestHealth(d) ==
     /\ destHealthy' = [destHealthy EXCEPT ![d] = ~@]
@@ -222,6 +231,7 @@ Next ==
     \/ ResetRunIsolation
     \/ ManualRetry
     \/ ManualClear
+    \/ ClearExhausted
     \/ \E d \in Dests : ToggleDestHealth(d)
 
 Spec == Init /\ [][Next]_vars

@@ -76,4 +76,21 @@ object ServiceReadinessMachine {
 
     /** 二次确认弹窗点击“开启”时的最终前置校验。 */
     fun canCommitEnable(snapshot: Snapshot): Boolean = snapshot.isReady
+
+    /** 权限页 RECEIVE_SMS 授权引导的显式 3 态机。 */
+    enum class SmsPermissionUiState {
+        GRANTED,
+        CAN_REQUEST_DIALOG,
+        PERMANENTLY_DENIED_OPEN_SETTINGS,
+    }
+
+    fun evaluateSmsPermissionUi(
+        granted: Boolean,
+        askedBefore: Boolean,
+        shouldShowRationale: Boolean,
+    ): SmsPermissionUiState = when {
+        granted -> SmsPermissionUiState.GRANTED
+        !askedBefore || shouldShowRationale -> SmsPermissionUiState.CAN_REQUEST_DIALOG
+        else -> SmsPermissionUiState.PERMANENTLY_DENIED_OPEN_SETTINGS
+    }
 }

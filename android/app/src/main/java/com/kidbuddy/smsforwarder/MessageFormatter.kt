@@ -45,4 +45,11 @@ object MessageFormatter {
         val deviceLine = if (cleanDevice.isNotEmpty()) "\n接收手机：$cleanDevice" else ""
         return "$header$deviceLine\n$body\n发件人：$displaySender ｜ $time"
     }
+
+    /** 统一格式化各入口（首页、目的地页、新建规则向导）的测试消息正文，确保始终附带接收手机备注。 */
+    fun formatTestMessage(destination: Destination, deviceLabel: String? = null): String {
+        val cleanDevice = sanitizeDeviceLabel(deviceLabel)
+        val deviceLine = if (cleanDevice.isNotEmpty()) "\n接收手机：$cleanDevice" else ""
+        return "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${destination.type.displayName}「${destination.name}」连接成功。"
+    }
 }

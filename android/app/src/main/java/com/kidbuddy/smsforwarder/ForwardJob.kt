@@ -18,6 +18,9 @@ class ForwardJob : JobService() {
     }
     @Volatile private var currentRun = Run()
     override fun onStartJob(params: JobParameters): Boolean {
+        // 若系统极端情况下未先回调 onStopJob 即重入，主动中止旧 Run 并断开旧连接，防止双 Run 并发。
+        currentRun.stopped.set(true)
+        currentRun.connection?.disconnect()
         val run = Run()
         currentRun = run
         val stopped = run.stopped
@@ -118,7 +121,6 @@ class ForwardJob : JobService() {
                             }
                         } finally { run.connection?.disconnect(); run.connection = null }
                     }
-                    retry = retry || store.next() != null
                 } catch (_: Exception) { State.status(this, "处理队列失败，稍后重试"); retry = true }
             }
             synchronized(State.gate) {

@@ -80,6 +80,14 @@ class StateMachinesConformanceTest {
         assertTrue(OutboxStateMachine.canManualClear(enabled = false))
         assertFalse(OutboxStateMachine.canManualClear(enabled = true))
         assertEquals(42L, OutboxStateMachine.nextGeneration(41L))
+
+        val emptySummary = OutboxStateMachine.QueueSummary(total = 0, exhausted = 0)
+        assertEquals(0, emptySummary.eligible)
+        assertFalse(OutboxStateMachine.canClearExhausted(emptySummary))
+
+        val mixedSummary = OutboxStateMachine.QueueSummary(total = 5, exhausted = 2)
+        assertEquals(3, mixedSummary.eligible)
+        assertTrue(OutboxStateMachine.canClearExhausted(mixedSummary))
     }
 
     // ==================== 2. ServiceReadinessMachine (ServiceReadiness.tla) ====================
@@ -137,6 +145,40 @@ class StateMachinesConformanceTest {
         // 确保 5 种显式状态与 6 种动作全部被穷举命中
         assertEquals(ServiceReadinessMachine.State.entries.toSet(), observedStates)
         assertEquals(ServiceReadinessMachine.PowerTapAction.entries.toSet(), observedActions)
+
+        // 穷举 RECEIVE_SMS 权限页 3 态机
+        assertEquals(
+            ServiceReadinessMachine.SmsPermissionUiState.GRANTED,
+            ServiceReadinessMachine.evaluateSmsPermissionUi(granted = true, askedBefore = false, shouldShowRationale = false),
+        )
+        assertEquals(
+            ServiceReadinessMachine.SmsPermissionUiState.CAN_REQUEST_DIALOG,
+            ServiceReadinessMachine.evaluateSmsPermissionUi(granted = false, askedBefore = false, shouldShowRationale = false),
+        )
+        assertEquals(
+            ServiceReadinessMachine.SmsPermissionUiState.CAN_REQUEST_DIALOG,
+            ServiceReadinessMachine.evaluateSmsPermissionUi(granted = false, askedBefore = true, shouldShowRationale = true),
+        )
+        assertEquals(
+            ServiceReadinessMachine.SmsPermissionUiState.PERMANENTLY_DENIED_OPEN_SETTINGS,
+            ServiceReadinessMachine.evaluateSmsPermissionUi(granted = false, askedBefore = true, shouldShowRationale = false),
+        )
+    }
+
+    @Test
+    fun formatTestMessageAlwaysIncludesSanitizedDeviceLabelWhenPresent() {
+        val dest = Destination(
+            id = "d1",
+            name = "运营群",
+            type = DestinationType.FEISHU,
+            webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/12345678-abcd-ef01",
+        )
+        val withoutLabel = MessageFormatter.formatTestMessage(dest, "")
+        assertTrue(withoutLabel.startsWith("短信转发\n测试消息："))
+        assertFalse("接收手机" in withoutLabel)
+
+        val withLabel = MessageFormatter.formatTestMessage(dest, "浦东店\n美团号")
+        assertTrue(withLabel.startsWith("短信转发\n接收手机：浦东店 美团号\n测试消息："))
     }
 
     // ==================== 3. ConfigPersistenceMachine (ConfigPersistence.tla) ====================

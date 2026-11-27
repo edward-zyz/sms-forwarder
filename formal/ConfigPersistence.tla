@@ -99,7 +99,13 @@ SaveFailRestoreFail ==
     /\ failedRestore' = TRUE
     /\ UNCHANGED <<diskState, legacyState, generation, lastLoadResult>>
 
-\* 5. 进程重启：内存锁与脏内存清空，重新从磁盘加载
+\* 5. 增量更新（如删除/编辑单个目的地或规则）：若当前损坏或回滚锁定，绝不能用空配置静默覆盖
+SafeUpdateRejected ==
+    /\ (failedRestore \/ memState = "CORRUPTED")
+    /\ lastLoadResult' = "REJECTED"
+    /\ UNCHANGED <<diskState, memState, legacyState, failedRestore, generation>>
+
+\* 6. 进程重启：内存锁与脏内存清空，重新从磁盘加载
 ProcessRestart ==
     /\ memState' = diskState
     /\ failedRestore' = FALSE
@@ -111,6 +117,7 @@ Next ==
     \/ SaveSuccess
     \/ SaveFailRestoreSuccess
     \/ SaveFailRestoreFail
+    \/ SafeUpdateRejected
     \/ ProcessRestart
 
 Spec == Init /\ [][Next]_vars

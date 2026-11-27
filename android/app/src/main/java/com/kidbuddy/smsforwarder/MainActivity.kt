@@ -405,9 +405,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     synchronized(State.gate) {
                         if (!State.enabled(this)) { toast("转发已暂停"); return@setPositiveButton }
-                        val deviceLabel = State.deviceLabel(this)
-                        val deviceLine = if (deviceLabel.isNotEmpty()) "\n接收手机：$deviceLabel" else ""
-                        val text = "短信转发$deviceLine\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
+                        val text = MessageFormatter.formatTestMessage(dest, State.deviceLabel(this))
                         Store(this).use { it.add(text, null, dest.id, "测试消息") }
                         State.status(this, "测试消息已入队，等待「${dest.name}」确认")
                         ForwardJob.schedule(this)
@@ -429,7 +427,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun clearQueue() {
-        if (!OutboxStateMachine.canManualClear(State.enabled(this))) { toast("请先暂停转发"); return }
+        val enabled = State.enabled(this)
+        val summary = Store(this).use { it.summary() }
+        if (enabled && OutboxStateMachine.canClearExhausted(summary)) {
+            ui.dialog().setTitle("清理失败项？")
+                .setMessage("将删除 ${summary.exhausted} 条已连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次的积压消息，不影响正常排队中的消息与新短信接收。")
+                .setPositiveButton("清理失败项") { _, _ ->
+                    synchronized(State.gate) {
+                        val removed = Store(this).use { it.clearExhausted() }
+                        if (removed > 0) State.status(this, "已清理 $removed 条达到重试上限的消息")
+                    }
+                    renderStatus()
+                }.setNegativeButton("取消", null).show()
+            return
+        }
+        if (!OutboxStateMachine.canManualClear(enabled)) { toast("请先暂停转发"); return }
         ui.dialog().setTitle("清空待发队列？")
             .setMessage("删除全部待发消息后，无法补发。手机原来的短信会保留。")
             .setPositiveButton("清空") { _, _ ->
@@ -494,7 +506,8 @@ class MainActivity : AppCompatActivity() {
         val hasDest = config != null && config.destinations.isNotEmpty()
         val snapshot = currentReadinessSnapshot(configResult)
         val ready = snapshot.isReady
-        val count = Store(this).use { it.count() }
+        val queueSummary = Store(this).use { it.summary() }
+        val count = queueSummary.total
 
         val nextHeroState = ServiceReadinessMachine.evaluate(snapshot)
         if (heroStateCache != nextHeroState) {
@@ -561,14 +574,24 @@ class MainActivity : AppCompatActivity() {
 
         queueCard.visibility = if (count > 0) View.VISIBLE else View.GONE
         if (count > 0) {
-            ui.setValueText(queueCountText, "$count 条待发", R.color.warning, bold = true)
-            queueHint.showText(if (enabled) {
-                "网络恢复后会自动重试；连续失败 8 次后可手动重试。"
+            val countLabel = if (queueSummary.hasExhausted) {
+                "$count 条待发（${queueSummary.exhausted} 条已达上限）"
             } else {
-                "转发已暂停。开启转发将继续发送，也可以直接清空。"
+                "$count 条待发"
+            }
+            ui.setValueText(queueCountText, countLabel, R.color.warning, bold = true)
+            queueHint.showText(when {
+                enabled && queueSummary.hasExhausted ->
+                    "有 ${queueSummary.exhausted} 条已连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次不再自动重试；可点「重试发送」或直接「清理失败项」。"
+                enabled ->
+                    "网络恢复后会自动重试；连续失败 ${OutboxStateMachine.MAX_ATTEMPTS} 次后可手动重试。"
+                else ->
+                    "转发已暂停。开启转发将继续发送，也可以直接清空。"
             })
-            ui.enabled(retryButton, enabled)
-            ui.enabled(clearButton, !enabled)
+            ui.enabled(retryButton, OutboxStateMachine.canManualRetry(enabled))
+            val canClear = OutboxStateMachine.canManualClear(enabled) || OutboxStateMachine.canClearExhausted(queueSummary)
+            clearButton.text = if (enabled && queueSummary.hasExhausted) "清理失败项" else "清空队列"
+            ui.enabled(clearButton, canClear)
         }
 
         if (config == null) {

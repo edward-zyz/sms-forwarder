@@ -244,27 +244,31 @@ class DestinationEditActivity : AppCompatActivity() {
             return
         }
 
-        synchronized(State.gate) {
-            val current = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig())
+        when (val result = ConfigStore.update(this) { current ->
             val nextDestinations = if (editingId != null && current.destinations.any { it.id == editingId }) {
                 current.destinations.map { if (it.id == editingId) candidate else it }
             } else {
                 current.destinations + candidate
             }
-            val nextConfig = current.copy(destinations = nextDestinations)
-            nextConfig.validationError()?.let { msg ->
-                showError(msg)
-                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                return
+            Result.success(current.copy(destinations = nextDestinations))
+        }) {
+            is ConfigStore.UpdateResult.Saved -> {
+                Toast.makeText(this, "目的地「${candidate.name}」已保存", Toast.LENGTH_SHORT).show()
+                finish()
             }
-            if (!ConfigStore.save(this, nextConfig)) {
+            is ConfigStore.UpdateResult.LoadFailed -> {
+                showError(result.message)
+                Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+            }
+            is ConfigStore.UpdateResult.Rejected -> {
+                showError(result.message)
+                Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+            }
+            ConfigStore.UpdateResult.SaveFailed -> {
                 showError("保存失败，请检查手机存储空间后重试")
                 Toast.makeText(this, "保存失败，请重试", Toast.LENGTH_LONG).show()
-                return
             }
         }
-        Toast.makeText(this, "目的地「${candidate.name}」已保存", Toast.LENGTH_SHORT).show()
-        finish()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

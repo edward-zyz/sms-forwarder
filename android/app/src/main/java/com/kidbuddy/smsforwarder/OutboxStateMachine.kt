@@ -92,11 +92,29 @@ object OutboxStateMachine {
         enabled: Boolean,
     ): Boolean = !stopped && enabled && (retryRequested || hasEligibleRemaining)
 
+    /** 队列积压摘要：显式区分可自动重试条目与已达上限死信条目。 */
+    data class QueueSummary(
+        val total: Int,
+        val exhausted: Int,
+    ) {
+        init {
+            require(total >= 0 && exhausted in 0..total) {
+                "非法队列摘要：total=$total, exhausted=$exhausted"
+            }
+        }
+
+        val eligible: Int get() = total - exhausted
+        val hasExhausted: Boolean get() = exhausted > 0
+    }
+
     /** 手动重试队列仅在转发开启时允许。 */
     fun canManualRetry(enabled: Boolean): Boolean = enabled
 
-    /** 手动清空队列仅在转发暂停时允许。 */
+    /** 手动清空全部队列仅在转发暂停时允许。 */
     fun canManualClear(enabled: Boolean): Boolean = !enabled
+
+    /** 清理已达最大重试次数的死信条目：无需暂停全局转发，且不触碰正常待发条目。 */
+    fun canClearExhausted(summary: QueueSummary): Boolean = summary.hasExhausted
 
     /** 开关切换或配置变更统一递增代际号。 */
     fun nextGeneration(current: Long): Long = current + 1L

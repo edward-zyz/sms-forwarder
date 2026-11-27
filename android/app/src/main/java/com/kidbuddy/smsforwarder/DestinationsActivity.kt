@@ -116,7 +116,7 @@ class DestinationsActivity : AppCompatActivity() {
                             Toast.makeText(this, "转发已暂停", Toast.LENGTH_SHORT).show()
                             return@setPositiveButton
                         }
-                        val text = "短信转发\n测试消息：安卓手机已准备好，收到此消息表示${dest.type.displayName}「${dest.name}」连接成功。"
+                        val text = MessageFormatter.formatTestMessage(dest, State.deviceLabel(this))
                         Store(this).use { it.add(text, null, dest.id, "测试消息") }
                         State.status(this, "测试消息已入队，等待「${dest.name}」确认")
                         ForwardJob.schedule(this)
@@ -145,14 +145,18 @@ class DestinationsActivity : AppCompatActivity() {
             .setTitle("删除目的地？")
             .setMessage("将删除${dest.type.displayName}「${dest.name}」的配置。")
             .setPositiveButton("删除") { _, _ ->
-                synchronized(State.gate) {
-                    val current = runCatching { ConfigStore.load(this) }.getOrDefault(ForwardConfig())
-                    val next = current.copy(destinations = current.destinations.filterNot { it.id == dest.id })
-                    if (ConfigStore.save(this, next)) {
-                        Toast.makeText(this, "已删除「${dest.name}」", Toast.LENGTH_SHORT).show()
+                when (val result = ConfigStore.update(this) { current ->
+                    val latestRefs = current.rules.count { it.destinationId == dest.id }
+                    if (latestRefs > 0) {
+                        Result.failure(IllegalStateException("「${dest.name}」正被 $latestRefs 条转发规则使用，无法删除"))
                     } else {
-                        Toast.makeText(this, "删除失败，请重试", Toast.LENGTH_LONG).show()
+                        Result.success(current.copy(destinations = current.destinations.filterNot { it.id == dest.id }))
                     }
+                }) {
+                    is ConfigStore.UpdateResult.Saved -> Toast.makeText(this, "已删除「${dest.name}」", Toast.LENGTH_SHORT).show()
+                    is ConfigStore.UpdateResult.LoadFailed -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    is ConfigStore.UpdateResult.Rejected -> Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+                    ConfigStore.UpdateResult.SaveFailed -> Toast.makeText(this, "删除失败，请重试", Toast.LENGTH_LONG).show()
                 }
                 renderList()
             }

@@ -60,6 +60,31 @@ object ConfigStore {
         false
     }
 
+    sealed class UpdateResult {
+        data class Saved(val config: ForwardConfig) : UpdateResult()
+        data class LoadFailed(val message: String) : UpdateResult()
+        data class Rejected(val message: String) : UpdateResult()
+        data object SaveFailed : UpdateResult()
+    }
+
+    /**
+     * 安全原子更新配置（在 State.gate 锁内执行）：
+     * 若当前已保存配置损坏或处于回滚失败锁定态，绝不静默降级为空配置覆写用户数据。
+     */
+    fun update(context: Context, transform: (ForwardConfig) -> Result<ForwardConfig>): UpdateResult =
+        synchronized(State.gate) {
+            val current = runCatching { load(context) }.getOrElse { err ->
+                return@synchronized UpdateResult.LoadFailed(err.message ?: "转发配置异常，请先检查并恢复配置")
+            }
+            val next = transform(current).getOrElse { err ->
+                return@synchronized UpdateResult.Rejected(err.message ?: "配置校验未通过")
+            }
+            next.validationError()?.let { err ->
+                return@synchronized UpdateResult.Rejected(err)
+            }
+            if (save(context, next)) UpdateResult.Saved(next) else UpdateResult.SaveFailed
+        }
+
     /** 兼容旧版未绑定 destinationId 的历史待发队列条目。 */
     fun resolveDestination(context: Context, config: ForwardConfig, destinationId: String): Destination? {
         if (destinationId.isNotBlank()) return config.destinationById(destinationId)
